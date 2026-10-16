@@ -15,7 +15,7 @@ jobs:
           - {runner: windows-11-arm, backend: cpu}
           - {runner: macos-15-intel, backend: cpu}
           - {runner: macos-15, backend: metal}
-          - {runner: ubuntu-22.04, backend: vulkan}
+          - {runner: ubuntu-24.04, backend: vulkan}
           - {runner: ubuntu-24.04-arm, backend: vulkan}
           - {runner: ubuntu-22.04, backend: cuda}
     runs-on: ${{ matrix.runner }}
@@ -28,14 +28,15 @@ jobs:
           python-version: '3.12'
       - name: Install Vulkan SDK components
         if: matrix.backend == 'vulkan'
-        run: sudo apt-get update && sudo apt-get install -y libvulkan-dev glslc
+        run: sudo apt-get update && sudo apt-get install -y libvulkan-dev glslc glslang-tools spirv-headers
       - name: Install CUDA compiler
         if: matrix.backend == 'cuda'
         uses: Jimver/cuda-toolkit@v0.2.24
         with:
           cuda: '12.8.1'
           method: network
-          sub-packages: '["nvcc", "cudart", "cublas", "cublas_dev", "cudart_dev"]'
+          sub-packages: '["nvcc", "cudart", "cudart-dev"]'
+          non-cuda-sub-packages: '["libcublas", "libcublas-dev"]'
       - name: Build and verify package
         run: python native/binaries/package.py --backend ${{ matrix.backend }}
       - uses: actions/upload-artifact@v4
