@@ -1,0 +1,47 @@
+name: Publish Mimir native binaries
+on:
+  workflow_run:
+    workflows: ['DFM Mimir native binaries']
+    types: [completed]
+permissions:
+  actions: read
+  contents: write
+jobs:
+  publish:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'workflow_dispatch' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+          path: artifacts
+      - name: Verify and attach archives to the native preview
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import subprocess
+          root = Path('artifacts').resolve()
+          archives = []
+          for sidecar in root.rglob('*.sha256'):
+              digest, name = sidecar.read_text().strip().split(maxsplit=1)
+              if Path(name).name != name or not name.startswith('dfm-mimir-0.1.5-'):
+                  raise SystemExit(f'Unexpected artifact name: {name}')
+              if not name.endswith(('.tar.gz', '.zip')):
+                  raise SystemExit(f'Unexpected archive type: {name}')
+              archive = sidecar.parent / name
+              if hashlib.sha256(archive.read_bytes()).hexdigest() != digest:
+                  raise SystemExit(f'Checksum mismatch: {name}')
+              archives.extend([str(archive), str(sidecar)])
+          if not archives:
+              raise SystemExit('No verified archives')
+          subprocess.run(['gh', 'release', 'upload', 'dfm-mimir-native-v0.1.5', '--clobber', *archives], check=True)
+          PY

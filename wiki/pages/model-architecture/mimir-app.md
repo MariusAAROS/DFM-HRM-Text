@@ -4,7 +4,7 @@ title: DFM Mimir app and portable backend selection
 description: Separate Flutter client, shared native engine, local backend evidence and remaining platform qualification.
 tags: [mimir, flutter, desktop, mobile, backends]
 status: draft
-last_updated: 2026-10-16
+last_updated: 2026-10-17
 confidence: high
 ---
 # DFM Mimir app and portable backends
@@ -843,3 +843,12 @@ both generated a correct Danish capital answer using the embedded chat template.
 This is a smoke test, not broad numerical qualification. The native CLI preview
 is published under GitHub tag `dfm-mimir-native-v0.1.5`; additional CI artifacts
 must pass their checks before being attached.
+
+As of 17 October, eight archives are published: macOS ARM64 Metal/x64 CPU,
+Linux ARM64/x64 CPU and Vulkan, Windows ARM64/x64 CPU. CI run `38972076345`
+has passed all jobs except Linux x64 CUDA, which is still compiling at this
+observation. Downloaded archive checksums, license files and manifests were
+verified. `mimir-binaries-publish.yml` attaches checksum-verified artifacts to the
+existing native preview only after a successful, manually dispatched main-branch
+matrix run from this repository. It never executes downloaded artifact contents.
+CUDA publication remains contingent on CI success, not implied by this note.
