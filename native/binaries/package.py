@@ -49,7 +49,9 @@ def main():
     _run(exe, '--help')
     devices = subprocess.check_output([str(exe), '--list-devices'], text=True, cwd=stage)
     (stage / 'devices.txt').write_text(devices)
+    shutil.copy2(ROOT / 'LICENSE', stage / 'LICENSE')
     shutil.copy2(ROOT / 'llama.cpp/LICENSE', stage / 'LICENSE-llama.cpp')
+    shutil.copytree(ROOT / 'llama.cpp/licenses', stage / 'licenses')
     shutil.copy2(ROOT / 'native/binaries/README.md', stage / 'README.md')
     (stage / 'manifest.json').write_text(json.dumps({
         'source': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),

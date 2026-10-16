@@ -21,7 +21,7 @@ MixedLM support, but this CLI does not expose a MixedLM switch.
 
 Every package includes CPU support. Accelerator backends are dynamically loaded;
 CPU-only packages avoid GPU driver dependencies. Use `--device cpu` explicitly
-when diagnosing driver problems. CUDA needs a compatible NVIDIA driver; Vulkan
+when diagnosing driver problems. CUDA needs a compatible NVIDIA driver and CUDA 12.8 runtime/cuBLAS libraries; Vulkan
 needs a Vulkan-capable driver; OpenCL needs the vendor's OpenCL runtime. A
 successful build is not a guarantee of model correctness on untested hardware.
 See manifest.json for provenance and validation scope, and devices.txt for the

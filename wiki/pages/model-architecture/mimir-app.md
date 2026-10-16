@@ -4,7 +4,7 @@ title: DFM Mimir app and portable backend selection
 description: Separate Flutter client, shared native engine, local backend evidence and remaining platform qualification.
 tags: [mimir, flutter, desktop, mobile, backends]
 status: draft
-last_updated: 2026-09-24
+last_updated: 2026-10-16
 confidence: high
 ---
 # DFM Mimir app and portable backends
@@ -819,3 +819,16 @@ Settings tabs: Model, Appearance, Online and Advanced. Advanced holds compaction
 and profiles; Online holds search/feedback. Dependent controls hide when their
 feature is off, preserving values; temporary busy locks stay disabled in place.
 The model status describes acceleration; backend details sit by its selector.
+
+## Native CLI distribution — 16 October 2026
+
+`native/binaries/package.py` and `.github/workflows/mimir-binaries.yml` add
+standalone mimir-chat archives with dynamic backend libraries, CPU fallback,
+licenses, checksums and source manifests. These are not Flutter installers and
+do not bundle weights. The CLI uses model chat templates and PrefixLM; the
+engine contains MixedLM but the CLI has no mode switch. The initial matrix is
+macOS ARM64 Metal/x64 CPU, Linux and Windows ARM64/x64 CPU, Linux ARM64/x64
+Vulkan, and Linux x64 CUDA. Packaging validates policy tests and executable
+startup/device enumeration; these checks do not qualify inference on GPU
+hardware absent from hosted runners. CUDA packages require external CUDA runtime
+and cuBLAS libraries. Qualcomm/Hexagon builds remain outside this initial matrix.
