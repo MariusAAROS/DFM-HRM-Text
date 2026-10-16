@@ -832,3 +832,14 @@ Vulkan, and Linux x64 CUDA. Packaging validates policy tests and executable
 startup/device enumeration; these checks do not qualify inference on GPU
 hardware absent from hosted runners. CUDA packages require external CUDA runtime
 and cuBLAS libraries. Qualcomm/Hexagon builds remain outside this initial matrix.
+
+The first CI pass exposed missing Vulkan SPIR-V headers/Ubuntu 22.04 glslc,
+incorrect CUDA apt package names, and the Windows ARM64 requirement for ClangCL.
+The corrected matrix uses Ubuntu 24.04 for Vulkan and explicit CUDA/cuBLAS
+packages. An archive audit also found absolute build-directory rpaths; packaging
+now uses `@loader_path` on macOS and `$ORIGIN` on Linux. The extracted macOS ARM64
+archive was tested from a temporary directory with v1.5 Q4_K_M on CPU and Metal;
+both generated a correct Danish capital answer using the embedded chat template.
+This is a smoke test, not broad numerical qualification. The native CLI preview
+is published under GitHub tag `dfm-mimir-native-v0.1.5`; additional CI artifacts
+must pass their checks before being attached.
