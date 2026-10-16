@@ -26,7 +26,8 @@ def main():
     build = ROOT / 'logs' / 'binary-builds' / name
     flags = ['-DCMAKE_BUILD_TYPE=Release', '-DGGML_NATIVE=OFF', '-DBUILD_SHARED_LIBS=ON',
              '-DGGML_BACKEND_DL=ON', '-DGGML_OPENMP=OFF', '-DLLAMA_OPENSSL=OFF',
-             '-DMIMIR_BUILD_TESTS=ON']
+             '-DMIMIR_BUILD_TESTS=ON', '-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON',
+             '-DCMAKE_INSTALL_RPATH=' + ('@loader_path' if system == 'macos' else '$ORIGIN')]
     for backend in ['metal', 'vulkan', 'cuda', 'opencl']:
         flags.append(f'-DGGML_{backend.upper()}={"ON" if backend == args.backend else "OFF"}')
     if system == 'windows' and arch == 'arm64':
