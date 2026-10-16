@@ -29,6 +29,8 @@ def main():
              '-DMIMIR_BUILD_TESTS=ON']
     for backend in ['metal', 'vulkan', 'cuda', 'opencl']:
         flags.append(f'-DGGML_{backend.upper()}={"ON" if backend == args.backend else "OFF"}')
+    if system == 'windows' and arch == 'arm64':
+        flags += ['-T', 'ClangCL', '-A', 'ARM64']
     if arch == 'x64':
         flags += ['-DGGML_CPU_ALL_VARIANTS=ON']
     if system == 'macos':
