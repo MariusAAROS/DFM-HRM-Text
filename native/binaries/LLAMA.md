@@ -14,7 +14,8 @@ Keep all extracted files together. Use the model's embedded chat template:
     ./llama-server -m /path/to/model.gguf --attention prefix-lm --host 127.0.0.1 --port 8080
 
 The server offers an OpenAI-compatible local API; it does not use OpenAI services.
-Use --help for options. Benchmark and quantization tools are also included.
+HTTPS support is disabled in these portable builds; download model files separately.
+The local HTTP server remains available. Use --help for options. Benchmark and quantization tools are also included.
 Windows executable names have an .exe suffix.
 
 CPU support is included in GPU packages. Use -ngl 0 to request CPU inference.

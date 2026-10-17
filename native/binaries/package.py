@@ -59,7 +59,12 @@ def main():
             shutil.copy2(path, stage / path.name)
     exe = stage / (targets[0] + ('.exe' if system == 'windows' else ''))
     for target in (targets if is_llama else targets[:1]):
-        subprocess.run([str(stage / (target + ('.exe' if system == 'windows' else ''))), '--help'], check=True, cwd=stage)
+        result = subprocess.run([str(stage / (target + ('.exe' if system == 'windows' else ''))), '--help'],
+                                cwd=stage, text=True, capture_output=True)
+        print(result.stdout, result.stderr)
+        expected = 1 if target == 'llama-quantize' else 0
+        if result.returncode != expected or 'usage' not in (result.stdout + result.stderr).lower():
+            raise RuntimeError(f'{target} help failed: exit {result.returncode}')
     devices = subprocess.check_output([str(exe), '--list-devices'], text=True, cwd=stage)
     (stage / 'devices.txt').write_text(devices)
     shutil.copy2(ROOT / 'LICENSE', stage / 'LICENSE')
