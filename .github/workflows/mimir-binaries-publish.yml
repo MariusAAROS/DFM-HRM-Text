@@ -1,7 +1,7 @@
 name: Publish Mimir native binaries
 on:
   workflow_run:
-    workflows: ['DFM Mimir native binaries']
+    workflows: ['DFM Mimir native binaries', 'Mimir llama.cpp binaries']
     types: [completed]
 permissions:
   actions: read
@@ -24,16 +24,21 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
+          BUILD_WORKFLOW: ${{ github.event.workflow_run.name }}
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import hashlib
+          import os
           import subprocess
+          is_llama = os.environ['BUILD_WORKFLOW'] == 'Mimir llama.cpp binaries'
+          prefix = 'llama-mimir-4122b9a81-' if is_llama else 'dfm-mimir-0.1.5-'
+          tag = 'llama-mimir-4122b9a81' if is_llama else 'dfm-mimir-native-v0.1.5'
           root = Path('artifacts').resolve()
           archives = []
           for sidecar in root.rglob('*.sha256'):
               digest, name = sidecar.read_text().strip().split(maxsplit=1)
-              if Path(name).name != name or not name.startswith('dfm-mimir-0.1.5-'):
+              if Path(name).name != name or not name.startswith(prefix):
                   raise SystemExit(f'Unexpected artifact name: {name}')
               if not name.endswith(('.tar.gz', '.zip')):
                   raise SystemExit(f'Unexpected archive type: {name}')
@@ -43,5 +48,5 @@ jobs:
               archives.extend([str(archive), str(sidecar)])
           if not archives:
               raise SystemExit('No verified archives')
-          subprocess.run(['gh', 'release', 'upload', 'dfm-mimir-native-v0.1.5', '--clobber', *archives], check=True)
+          subprocess.run(['gh', 'release', 'upload', tag, '--clobber', *archives], check=True)
           PY
