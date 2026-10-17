@@ -152,3 +152,25 @@ which currently contains only nightly-tag.txt; use the numbered build release.
 These are published packages, not evidence that our PrefixLM/MixedLM execution
 has been qualified on each accelerator. Reusing upstream packaging is preferable
 to maintaining an independent matrix; hardware validation remains separate.
+
+## Reused release workflow (2026-10-17)
+
+Supersedes the earlier nine-target standalone packager: HRM-Text's
+.github/workflows/llama-binaries.yml now derives build jobs, UI build and archive
+assembly from the pinned upstream workflows. Regenerate with
+`python3 native/binaries/sync_upstream_release.py`; `--check` detects drift.
+Source checkout is pinned to the fork's full SHA, including in UI builds and
+local composite actions. All upstream targets are retained except s390x, whose
+upstream-specific runner is unavailable. Matrix fail-fast is disabled.
+
+Manual dispatch accepts publish=false (default, Actions artifacts) or true
+(draft upload followed by prerelease publication once every build passes).
+Tags use mimir-<source-sha>; assets keep upstream's llama-<tag>-bin-* names,
+Windows CPU/backend merge and separate CUDA runtimes. SOURCE.txt and SHA256SUMS
+are added. The old mimir-chat publisher no longer handles standalone releases.
+Standalone TLS follows upstream, not the Apple app's OS-only networking policy.
+See native/binaries/LLAMA.md for operation and package limitations.
+
+The generator passed YAML parsing, pinned-checkout/dependency validation and
+deterministic regeneration checks. Cross-platform execution remains a CI gate;
+successful packaging must not be confused with GPU/NPU inference qualification.
