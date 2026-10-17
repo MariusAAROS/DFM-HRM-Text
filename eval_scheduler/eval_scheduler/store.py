@@ -338,7 +338,26 @@ class SQLiteJobStore:
                 changes[key] = job
             if definitions_changed:
                 _validate_graph([_job(r) for r in self._rows(db)])
+            # A barrier may have completed because failed ancestry made future
+            # evals unreachable. Administrative recovery can make them runnable
+            # again; cached barrier completion must not bypass that work.
+            self._rearm_terminal_barriers(db)
             return changes
+
+    @staticmethod
+    def _rearm_terminal_barriers(db):
+        query = READY_SQL.format(candidates='jobs j', candidate_filter="j.deps_mode='terminal' AND ")
+        query = query.replace("j.status='pending' AND NOT EXISTS", "j.status='done' AND NOT EXISTS")
+        while True:
+            satisfied = {r['job_id'] for r in db.execute(query, {'limit': -1})}
+            stale = [r['job_id'] for r in db.execute(
+                "SELECT job_id FROM jobs WHERE status='done' AND deps_mode='terminal' "
+                "AND json_extract(definition, '$.action')='terminal_barrier'")
+                if r['job_id'] not in satisfied]
+            if not stale:
+                return
+            db.executemany("UPDATE jobs SET status='pending',attempt=0 WHERE job_id=?",
+                           [(key,) for key in stale])
 
     def get_admin_lock(self) -> bool:
         """Persistent claim fence, not a lease; existing claims can still finish."""
