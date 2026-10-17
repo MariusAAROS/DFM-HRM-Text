@@ -3,7 +3,7 @@ type: Runbook
 title: PrefixLM and MixedLM upstream integration
 description: Scoped integration onto October 2026 upstream llama.cpp, API adaptation, qualification evidence and release gates.
 tags: [mimir, llama-cpp, prefixlm, mixedlm, release]
-status: experimental
+status: draft
 last_updated: 2026-10-17
 confidence: high
 ---
@@ -11,7 +11,7 @@ confidence: high
 # PrefixLM and MixedLM upstream integration
 
 The standalone binary release is paused until this integration is qualified.
-This supersedes the preliminary merge assessment in [the app runbook](mimir-app.md):
+This supersedes the preliminary merge assessment in [the binary runbook](mimir-native-binaries.md):
 the final fetched upstream master is f74e2fa6a31cc33ab4ee4ae516641cfe62df3924,
 not the earlier ea0c4c2c8 observation. A remote master lookup confirmed this
 pin on 2026-10-17. There are 688 upstream-only commits and eight old fork-only
@@ -94,6 +94,7 @@ Dispatch .github/workflows/mimir-runtime.yml on the integration branch with
 core_only=true. This runs standalone Linux CPU Release and AddressSanitizer
 builds, both PrefixLM suites, ordinary architecture checks and helper tests.
 It does not run the historical app/persistence qualification workflow.
+Initial CI run: https://github.com/schneiderkamplab/HRM-Text/actions/runs/38997326649.
 
 UBSan is a separate unresolved upstream issue: ggml/src/ggml.c still performs
 null-base pointer arithmetic in incr_ptr_aligned during graph sizing. The old
@@ -103,5 +104,10 @@ that unrelated issue. Do not describe this build as UBSan-clean.
 CUDA, Vulkan, Windows and Qualcomm runtime qualification must be repeated for
 this new pin; evidence from the old pin does not automatically carry over.
 The existing broad binary workflow still names the old pin and must be updated
-before dispatch/publication. Apple application packages are not rebuilt or
-released by this integration.
+before dispatch/publication. The native mimir-chat consumer also compiles successfully against the updated API
+and generates “København.” using the v1.5 Q4_K_M model on Metal.
+Apple application packages are not rebuilt or released by this integration.
+
+Knowledge validation: uv run --no-project --with pyyaml python scripts/validate_okf.py wiki
+completed with zero errors and 15 pre-existing missing-local-link warnings.
+Use --no-project here to avoid installing the training project dependencies.

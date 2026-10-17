@@ -2893,3 +2893,4 @@ non-thinking decisions, bounded continuous refill and dedicated CPU/disk owners.
 Historical journals and accepted rows are preserved during client migration.
 
 - 2026-10-17: Added the scoped PrefixLM/MixedLM upstream integration runbook, API adaptation and CPU/Metal qualification evidence; unrelated persistence, Vulkan and ggml changes follow upstream.
+- 2026-10-17: Split native distribution and appearance/settings from the oversized Mimir app page; retained historical content and links.

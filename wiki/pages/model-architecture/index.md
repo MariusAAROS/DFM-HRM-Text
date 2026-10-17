@@ -55,3 +55,7 @@
 * [DFM Mimir v1.5 GGUFs](mimir-v1.5-ggufs.md) - Conversion, tokenizer/template checks and official GGUF publication.
 
 * [PrefixLM and MixedLM upstream integration](prefixlm-upstream-integration.md) - Scoped upstream port, extended batch API, regression evidence and release gates.
+
+* [Mimir native binary distribution](mimir-native-binaries.md) - Packaging matrix and native wrapper/llama.cpp release history.
+
+* [Mimir app appearance and settings](mimir-app-appearance.md) - Text scaling and settings organization.
