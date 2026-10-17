@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build portable Mimir chat binaries from the pinned llama.cpp checkout."""
+"""Build portable native tools from the pinned llama.cpp checkout."""
 import argparse
 import hashlib
 import json
@@ -18,11 +18,15 @@ def _run(*args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--backend', choices=['cpu', 'metal', 'vulkan', 'cuda', 'opencl'], default='cpu')
+    parser.add_argument('--product', choices=['mimir', 'llama'], default='mimir')
     parser.add_argument('--version', default='0.1.5')
     args = parser.parse_args()
     system = {'Darwin': 'macos', 'Linux': 'linux', 'Windows': 'windows'}[platform.system()]
     arch = 'arm64' if platform.machine().lower() in ('arm64', 'aarch64') else 'x64'
-    name = f'dfm-mimir-{args.version}-{system}-{arch}-{args.backend}-cli'
+    is_llama = args.product == 'llama'
+    prefix = 'llama-mimir' if is_llama else 'dfm-mimir'
+    name = f'{prefix}-{args.version}-{system}-{arch}-{args.backend}' + ('' if is_llama else '-cli')
+    targets = ['llama-cli', 'llama-server', 'llama-bench', 'llama-quantize'] if is_llama else ['mimir-chat', 'mimir-backend-policy-tests', 'mimir-compaction-tests']
     build = ROOT / 'logs' / 'binary-builds' / name
     flags = ['-DCMAKE_BUILD_TYPE=Release', '-DGGML_NATIVE=OFF', '-DBUILD_SHARED_LIBS=ON',
              '-DGGML_BACKEND_DL=ON', '-DGGML_OPENMP=OFF', '-DLLAMA_OPENSSL=OFF',
@@ -36,31 +40,37 @@ def main():
         flags += ['-DGGML_CPU_ALL_VARIANTS=ON']
     if system == 'macos':
         flags += ['-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0', '-DGGML_METAL_EMBED_LIBRARY=ON']
-    _run('cmake', '-S', ROOT / 'native/mimir', '-B', build, *flags)
+    if is_llama:
+        flags += ['-DLLAMA_BUILD_TESTS=OFF', '-DLLAMA_BUILD_EXAMPLES=OFF',
+                  '-DLLAMA_BUILD_APP=OFF', '-DLLAMA_BUILD_TOOLS=ON',
+                  '-DLLAMA_BUILD_SERVER=ON', '-DLLAMA_BUILD_COMMON=ON']
+    _run('cmake', '-S', ROOT / ('llama.cpp' if is_llama else 'native/mimir'), '-B', build, *flags)
     _run('cmake', '--build', build, '--config', 'Release', '--target',
-         'mimir-chat', 'mimir-backend-policy-tests', 'mimir-compaction-tests', '--parallel', '3')
-    _run('ctest', '--test-dir', build, '-C', 'Release', '-R', 'backend-policy|compaction-planner', '--output-on-failure')
+         *targets, '--parallel', '3')
+    if not is_llama:
+        _run('ctest', '--test-dir', build, '-C', 'Release', '-R', 'backend-policy|compaction-planner', '--output-on-failure')
     stage = ROOT / 'logs' / 'binary-packages' / name
     if stage.exists():
         shutil.rmtree(stage)
     stage.mkdir(parents=True)
     for path in (build / 'bin').rglob('*'):
-        if path.is_file() and (path.name in ('mimir-chat', 'mimir-chat.exe') or
+        if path.is_file() and (path.name in [t + ('.exe' if system == 'windows' else '') for t in targets] or
                               '.so' in path.name or path.suffix in ('.dll', '.dylib', '.metallib')):
             shutil.copy2(path, stage / path.name)
-    exe = stage / ('mimir-chat.exe' if system == 'windows' else 'mimir-chat')
-    _run(exe, '--help')
+    exe = stage / (targets[0] + ('.exe' if system == 'windows' else ''))
+    for target in (targets if is_llama else targets[:1]):
+        subprocess.run([str(stage / (target + ('.exe' if system == 'windows' else ''))), '--help'], check=True, cwd=stage)
     devices = subprocess.check_output([str(exe), '--list-devices'], text=True, cwd=stage)
     (stage / 'devices.txt').write_text(devices)
     shutil.copy2(ROOT / 'LICENSE', stage / 'LICENSE')
     shutil.copy2(ROOT / 'llama.cpp/LICENSE', stage / 'LICENSE-llama.cpp')
     shutil.copytree(ROOT / 'llama.cpp/licenses', stage / 'licenses')
-    shutil.copy2(ROOT / 'native/binaries/README.md', stage / 'README.md')
+    shutil.copy2(ROOT / ('native/binaries/LLAMA.md' if is_llama else 'native/binaries/README.md'), stage / 'README.md')
     (stage / 'manifest.json').write_text(json.dumps({
         'source': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
         'llama_cpp': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT / 'llama.cpp', text=True).strip(),
-        'platform': system, 'architecture': arch, 'backend': args.backend,
-        'validation': 'Build, policy tests, packaged help and device enumeration only; model inference not qualified by this job.',
+        'product': args.product, 'platform': system, 'architecture': arch, 'backend': args.backend,
+        'validation': 'Build, packaged help and device enumeration only; model inference not qualified by this job.',
     }, indent=2))
     output = ROOT / 'logs' / 'binary-assets'
     output.mkdir(parents=True, exist_ok=True)

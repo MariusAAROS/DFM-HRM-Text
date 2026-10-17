@@ -852,3 +852,16 @@ verified. `mimir-binaries-publish.yml` attaches checksum-verified artifacts to t
 existing native preview only after a successful, manually dispatched main-branch
 matrix run from this repository. It never executes downloaded artifact contents.
 CUDA publication remains contingent on CI success, not implied by this note.
+
+### 2026-10-17: standalone llama.cpp deliverable correction
+
+The requested broad-platform binaries are llama.cpp tools, not the native
+mimir-chat wrapper. The earlier native preview remains a separate deliverable.
+The shared packager now accepts --product llama and builds directly from the
+pinned llama.cpp checkout, packaging llama-cli, llama-server, llama-bench and
+llama-quantize. The separate llama-binaries workflow covers macOS ARM64 Metal
+and x64 CPU, Linux ARM64/x64 CPU and Vulkan, Linux x64 CUDA, and Windows
+ARM64/x64 CPU. Artifact versions identify the llama.cpp commit rather than the
+application version. Qualcomm GPU/NPU acceleration remains unqualified and is
+not represented by the Windows ARM64 CPU package. Initial build qualification
+is in progress; hosted GPU builds alone do not demonstrate GPU inference.
