@@ -1,0 +1,46 @@
+name: DFM Mimir native binaries
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {runner: ubuntu-22.04, backend: cpu}
+          - {runner: ubuntu-24.04-arm, backend: cpu}
+          - {runner: windows-2022, backend: cpu}
+          - {runner: windows-11-arm, backend: cpu}
+          - {runner: macos-15-intel, backend: cpu}
+          - {runner: macos-15, backend: metal}
+          - {runner: ubuntu-24.04, backend: vulkan}
+          - {runner: ubuntu-24.04-arm, backend: vulkan}
+          - {runner: ubuntu-22.04, backend: cuda}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - run: git submodule update --init llama.cpp
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Vulkan SDK components
+        if: matrix.backend == 'vulkan'
+        run: sudo apt-get update && sudo apt-get install -y libvulkan-dev glslc glslang-tools spirv-headers
+      - name: Install CUDA compiler
+        if: matrix.backend == 'cuda'
+        uses: Jimver/cuda-toolkit@v0.2.24
+        with:
+          cuda: '12.8.1'
+          method: network
+          sub-packages: '["nvcc", "cudart", "cudart-dev"]'
+          non-cuda-sub-packages: '["libcublas", "libcublas-dev"]'
+      - name: Build and verify package
+        run: python native/binaries/package.py --backend ${{ matrix.backend }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.runner }}-${{ matrix.backend }}
+          path: logs/binary-assets/*
+          if-no-files-found: error

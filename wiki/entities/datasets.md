@@ -4,10 +4,42 @@ title: Dataset Entities
 description: Inventory of datasets, source policy, and conversion decisions.
 tags: [datasets, catalog, conversion]
 status: stable
-last_updated: 2026-08-17
+last_updated: 2026-10-07
 confidence: medium
 ---
 # Dataset Entities
+
+## BAAI Access Candidates — 2026-10-07
+
+User-selected candidates are [COIG-PC](https://huggingface.co/datasets/BAAI/COIG-PC)
+for Chinese instruction data and
+[IndustryCorpus2](https://huggingface.co/datasets/BAAI/IndustryCorpus2)
+for potential domain-specific grounding, subject to
+[source filtering](/pages/source-filtering.md). Access is not admission to the
+training mix. Skip requests for broad web corpora and audio/multimodal datasets
+in this access round.
+
+Use University of Southern Denmark and Denmark in access forms. The user
+reported that an HF token does not authenticate these browser forms; a logged-in
+Firefox session was available and both forms were inspected on 2026-10-07.
+COIG-PC requires name, affiliation, country, license acknowledgement and a
+non-commercial-only agreement. IndustryCorpus2 requires organization, country
+and agreement not to conduct experiments that harm human subjects. Both forms
+state that the HF email and username are shared with repository authors.
+
+Initial status (superseded by the browser observation below on 2026-10-07):
+affiliation/country fields prepared; neither form submitted by the agent.
+Follow-up: IndustryCorpus2 now visibly reports access granted; the agent did
+not submit its form. The user supplied Peter Schneider-Kamp as the name;
+COIG-PC's browser form already contains that name, the affiliation and country,
+and a checked non-commercial agreement. Its final Acknowledge license button
+remained present; submission confirmation was pending at that observation.
+Final status, 2026-10-07: after the user's explicit confirmation, the agent
+clicked COIG-PC's Acknowledge license. Reopening its page verified "You have
+been granted access to this dataset." Both candidates now have browser-verified
+access; no dataset downloads or training admission were performed in this task.
+IndustryCorpus2's card describes broad aggregated sources including Pile,
+BigCode and OpenWebMath; any later use requires component-level selection.
 
 ## Local Andersen Modernization
 

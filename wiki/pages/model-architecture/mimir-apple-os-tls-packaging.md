@@ -4,7 +4,7 @@ title: Mimir Apple OS-only TLS packaging
 description: Pinned custom Flutter and Dart runtimes, pre-signing replacement, package audits, and Apple qualification evidence.
 tags: [mimir, apple, flutter, packaging, tls]
 status: draft
-last_updated: 2026-10-03
+last_updated: 2026-10-14
 confidence: high
 ---
 # Mimir Apple OS-only TLS packaging
@@ -116,3 +116,70 @@ The user authorized a reply and expanded review notes; the text is in
 23:13 CEST on 3 October 2026. Apple confirmed **Waiting for Review** for macOS
 under the same submission ID. This supersedes the pending-sign-in state and
 the earlier rejection; it is not approval of the entitlement or app.
+
+## Status inquiry — 7 October 2026
+
+Both platforms still showed Waiting for Review. At the user's request, sent
+one Apple Developer Support → App Review Status email inquiry covering both
+submissions, including their IDs, dates and the macOS entitlement clarification.
+The form required one platform, so iOS was selected and the message explicitly
+included macOS. Apple confirmed case **102988405559** and will reply by email.
+This was a status inquiry, not an expedited-review request; neither submission
+was withdrawn or modified. Confirmation screenshot:
+`logs/sdu-store/submission-13/status-inquiry-102988405559.png`.
+
+## macOS China/OpenAI clarification — 8 October 2026
+
+Superseded: the 7 October macOS Waiting for Review status. Apple rejected macOS
+build 13 at 16:03 CEST under Guideline 5 (Legal), interpreting the metadata's
+“OpenAI” reference as association with ChatGPT for China mainland distribution.
+The user authorized a reply; it was sent and verified in App Store Connect at
+16:11 CEST. It explains that Mimir inference runs on-device, no OpenAI services
+are used, and “OpenAI-compatible” refers only to the optional loopback HTTP API's
+request/response format. It distinguishes opt-in search and feedback, asks for
+reconsideration and clarification if the compatibility reference itself remains
+a China metadata issue, and makes no claim of Chinese regulatory exemption.
+No availability settings, metadata or builds were changed. macOS remains
+Rejected/Unresolved Issues pending Apple's response; iOS was Waiting for Review.
+Proof: `logs/sdu-store/submission-13/openai-clarification-2026-10-08.png`.
+
+At the user's further request, submitted a formal App Review Board appeal on
+8 October for **DFM Mimir (macOS)**, selecting **5 - Legal / App Rejection**
+under SDU. The appeal challenges the inference that API-format compatibility
+means use of ChatGPT/OpenAI services and requests clarification of any separate
+China requirement without claiming a regulatory exemption. Apple's confirmation
+explicitly states it received the appeal and will contact the developer with
+the outcome; no case number was displayed. Evidence and exact submitted text:
+`logs/sdu-store/submission-13/appeal-confirmation-2026-10-08.png` and
+`logs/sdu-store/submission-13/appeal-2026-10-08.txt`.
+
+## Review update — 14 October 2026
+
+Superseded: iOS Waiting for Review. App Store Connect now shows iOS 0.1.5
+**Pending Developer Release**; it has not been released by this agent.
+macOS remains Rejected/Unresolved Issues. Apple's 14 October 15:06 message
+requests resubmission “once any necessary adjustments have been made” and links
+to availability settings and Guideline 5. It does not explicitly accept the
+technical clarification or confirm a successful appeal. No availability changes
+or resubmission were made pending the user's decision about China mainland.
+The account also displays a new Developer Program License Agreement acceptance
+requirement for the SDU Account Holder before app updates/submissions.
+
+Later on 14 October, the user explicitly requested resubmission retaining China.
+Saved an additional review-note clarification distinguishing local API-format
+compatibility from OpenAI services, then used Update Review and Resubmit to App
+Review with unchanged macOS 0.1.5 build 13. Apple confirmed **Waiting for Review**
+at 16:40 CEST under the same submission ID. This supersedes the rejected status
+above. Availability was not changed; manual release remains selected. Despite
+the earlier agreement banner, the resubmission succeeded. Evidence:
+`logs/sdu-store/submission-13/macos-resubmission-2026-10-14.png`.
+
+## iOS public release — 14 October 2026
+
+At the user's explicit request, released iOS 0.1.5 build 13 using Release This
+Version and confirmed the 175-country/region distribution list, including China
+mainland and France. Apple changed the version to **Ready for Distribution**,
+superseding Pending Developer Release. Public storefront propagation was not
+independently checked. Evidence:
+`logs/sdu-store/submission-13/ios-release-2026-10-14.png`.
+macOS was last observed **In Review** and was not released.
