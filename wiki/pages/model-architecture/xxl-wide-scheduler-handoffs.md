@@ -13,6 +13,11 @@ Runtime guidance is in the [request-shared scheduler runbook](request-shared-eva
 
 ### 2026-10-17: Submodule publication blocker
 
+Resolved on recheck the same day: the remote now supplies `d7605ea`, and
+`git submodule update --init --recursive dfm-evals` completed successfully.
+The unavailable-pin status below is superseded; the installed evaluator now
+matches main's pin.
+
 Pulling main through `36c5584` succeeded without conflicts using
 `git -c fetch.recurseSubmodules=false pull --no-rebase` after recursive fetch
 failed. That revision pins `dfm-evals` to `d7605ea5efb4f30f2e442a2c639b3e59dbc41602`,
