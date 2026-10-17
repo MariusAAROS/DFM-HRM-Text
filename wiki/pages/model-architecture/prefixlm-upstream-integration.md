@@ -103,10 +103,20 @@ three ordinary CPU architecture cases per build. ASan used halt_on_error=1
 and detect_leaks=1. CI completed successfully on 2026-10-17; downloaded test
 logs are in logs/upstream-integration/linux-release and linux-asan.
 
-UBSan is a separate unresolved upstream issue: ggml/src/ggml.c still performs
-null-base pointer arithmetic in incr_ptr_aligned during graph sizing. The old
-fork fixed it independently; this integration deliberately follows upstream for
-that unrelated issue. Do not describe this build as UBSan-clean.
+Superseded (2026-10-17): the initial report described null-base pointer arithmetic
+in graph sizing as a current upstream UBSan issue. Inspection of the caller,
+ggml_graph_nbytes(), corrects that claim: current upstream starts its synthetic
+pointer at 1024 and subtracts 1024 from the result, explicitly working around
+the historical “applying non-zero offset X to null pointer” diagnostic. The old
+fork instead changed the helper to integer arithmetic. This integration follows
+upstream. UBSan has not been run on this pin; no current UBSan failure has been
+demonstrated, and neither UBSan-clean status nor a present blocker is established.
+
+Release status checked 2026-10-17: the standalone llama.cpp release
+llama-mimir-4122b9a81 is still a draft with zero assets. The public
+dfm-mimir-native-v0.1.5 release contains nine mimir-chat wrapper archives, not
+the requested standalone llama-cli/server/bench/quantize distribution. Packaging
+the integrated pin remains outstanding.
 
 CUDA, Vulkan, Windows and Qualcomm runtime qualification must be repeated for
 this new pin; evidence from the old pin does not automatically carry over.
