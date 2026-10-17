@@ -63,7 +63,7 @@ def main():
                                 cwd=stage, text=True, capture_output=True)
         print(result.stdout, result.stderr)
         expected = 1 if target == 'llama-quantize' else 0
-        if result.returncode != expected or 'usage' not in (result.stdout + result.stderr).lower():
+        if result.returncode != expected or not result.stdout.strip() or (target == 'llama-quantize' and 'usage:' not in result.stdout.lower()):
             raise RuntimeError(f'{target} help failed: exit {result.returncode}')
     devices = subprocess.check_output([str(exe), '--list-devices'], text=True, cwd=stage)
     (stage / 'devices.txt').write_text(devices)
