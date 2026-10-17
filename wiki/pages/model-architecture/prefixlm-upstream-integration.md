@@ -204,3 +204,18 @@ and sanitizer flags and leak detection remain enabled. This is a compiler
 selection change, not evidence that GCC ASan execution passed. Release matrix
 39003864987 had no failed jobs at this check, but is superseded by a fresh run
 against the updated test/source pin so distribution and qualification match.
+
+### Shared-library ASan startup limitation
+
+Run 39005079691: GCC Release passed. Clang ASan passed all five CTest suites
+and all three ordinary architecture cases, then llama-cli --help aborted with
+an ODR violation for httplib::detail::RegexMatcher RTTI. The duplicate globals
+are in libllama-server-impl.so and libllama-common.so. Upstream's vendor target
+builds cpp-httplib STATIC and links it into both shared libraries.
+
+ASan qualification now uses the supported BUILD_SHARED_LIBS=OFF configuration
+to give each executable a single copy. This does not disable ODR checks, fatal
+warnings, leak detection or ASan. It does not establish shared-package ASan
+startup cleanliness: that upstream linkage limitation remains unresolved.
+Release qualification and published package linkage remain unchanged. No fork
+runtime changes or release-matrix restart are needed for this CI-only adjustment.

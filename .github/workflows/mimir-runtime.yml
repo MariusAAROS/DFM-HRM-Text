@@ -169,6 +169,7 @@ jobs:
           flags=()
           if [ '${{ matrix.mode }}' = asan ]; then
             export CC=clang CXX=clang++
+            flags+=("-DBUILD_SHARED_LIBS=OFF")
             flags+=("-DCMAKE_C_FLAGS=-fsanitize=address -fno-omit-frame-pointer")
             flags+=("-DCMAKE_CXX_FLAGS=-fsanitize=address -fno-omit-frame-pointer")
           fi
