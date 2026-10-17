@@ -1,5 +1,7 @@
 # Knowledge Bundle Update Log
 
+- 2026-10-17: Used authorised B200 memory headroom to test released CUDA packages: 12.8 real-model chat passed, HRMText batch/token parity failed, and 13.4 inference hit unsupported PTX. See [release validation](pages/model-architecture/prefixlm-upstream-integration.md#gpu-headroom-experiments-2026-10-17).
+
 - 2026-10-17: Split the oversized [Mimir app reference](pages/model-architecture/mimir-app.md) into packaging, model catalog, UI defaults and native CLI concepts; retained historical heading links. The previously unavailable dfm-evals pin is now published and installed.
 
 - 2026-10-13: Merged upstream main through `137ce1f`, preserving local broker removal, environment sync-once and backfill changes. Resolved documentation conflicts by retaining both histories. Retained verified `/work/mimir` DFM14 evaluation paths because upstream `/work/dfm` paths do not exist on this node; data hashes and task definitions are unchanged. All seven submodules match their intended upstream tips (including `llama.cpp`'s `codex/mixedlm`). No live training or scheduler restart.

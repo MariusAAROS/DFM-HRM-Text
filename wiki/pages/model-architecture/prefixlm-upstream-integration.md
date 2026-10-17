@@ -293,3 +293,47 @@ pending a coordinated idle window. Local evidence: logs/release-smoke/;
 remote files: /home/ucloud/mimir-release-smoke/. The smoke harness and JSON
 responses are retained there. These short correctness checks are not speed
 benchmarks, especially with concurrent training on dfm.
+
+### GPU headroom experiments (2026-10-17)
+
+The earlier decision to defer all GPU inference was superseded by explicit user
+permission to use available memory headroom. Sequential tests used physical B200
+GPU 1 (UUID GPU-14fd8b70-0529-1716-1700-fce6cc64f3d9), with approximately
+18,216 MiB initially free. A process-group guard sampled memory every two seconds,
+limited additional usage to 4,096 MiB, required 10,000 MiB remaining free, and
+imposed a 300-second deadline per experiment. Training was not paused or
+reconfigured; shared GPU utilization means these are correctness experiments,
+not controlled performance measurements.
+
+- Released CUDA 12.8 x64 binaries and matching runtime passed actual Mimir v1.5
+  Q4_K_M CLI inference and two-turn server chat using the embedded chat template:
+  København, then Copenhagen. Context/batch/microbatch 1,024, GPU layers 99,
+  two CPU threads. Peak observed extra GPU allocation: 2,297 MiB.
+- CUDA 13.4 x64 device enumeration succeeded earlier, but actual inference now
+  **fails** on driver 610.57.04 (CUDA UMD 13.3): CUDA reports “the provided PTX
+  was compiled with an unsupported toolchain” from
+  ggml_cuda_kernel_can_use_pdl / cudaFuncGetAttributes. CLI aborted before
+  generation; peak extra allocation 37 MiB. Enumeration is insufficient evidence
+  of compatibility. Use the tested 12.8 archive on this host; do not change the
+  training host driver merely to qualify this archive.
+- A diagnostic test-llama-archs executable built from exact fork revision
+  1c979346d and linked against downloaded Linux libraries exposed an HRMText
+  parity failure with CUDA 12.8: batched causal answer versus single-token
+  answer after the same prefix, NMSE 8.63247055533e-6 versus the unchanged 1e-6
+  limit (original tests/test-llama-archs.cpp line 1477, diagnostic line 1478).
+  Peak extra allocation 719 MiB. The temporary harness only added call-site
+  diagnostics; released libraries and test tolerance were unchanged. This
+  blocks full CUDA regression qualification despite the real-model chat pass.
+  Kernel precision versus PrefixLM-specific behavior remains to be isolated.
+
+Evidence is retained under logs/release-smoke/cuda-*-results locally and
+/home/ucloud/mimir-release-smoke on dfm, including memory samples and harness
+logs. The diagnostic executable is not part of the published archives.
+
+The Llama architecture suite subsequently passed all 2,144 PrefixLM/MixedLM
+checks (CPU plus the single visible CUDA GPU, flash attention off/on), with
+829 MiB peak additional memory. All guards completed without triggering. After
+tests, GPU 1 returned to 164,404 MiB used / 18,216 MiB free, the original training
+process 24237 was still running, and no experimental server/test process remained.
+This narrows the observed regression to HRMText in this test set, but does not
+establish whether its cause is architecture-specific arithmetic or prefix logic.
