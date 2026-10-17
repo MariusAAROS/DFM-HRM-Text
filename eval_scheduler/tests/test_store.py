@@ -20,6 +20,38 @@ def job(key="a", **updates):
     return Job(key, Action.REPORT, "test", key).with_updates(**updates)
 
 
+def test_recovery_rearms_completed_terminal_barriers(tmp_path):
+    store = SQLiteJobStore(tmp_path/'jobs.sqlite')
+    store.import_jobs([
+        job('train', status=JobStatus.FAILED),
+        job('eval', deps=('train',)),
+        job('gate', action=Action.TERMINAL_BARRIER, deps=('eval',),
+            deps_mode='terminal', status=JobStatus.DONE),
+        job('outer', action=Action.TERMINAL_BARRIER, deps=('gate',),
+            deps_mode='terminal', status=JobStatus.DONE),
+        job('next', deps=('train', 'outer')),
+    ])
+    store.update_jobs({'train': {'status': JobStatus.PENDING}})
+    rows = {j.job_id: j for j in store.load_jobs()}
+    assert rows['gate'].status == rows['outer'].status == JobStatus.PENDING
+    assert {j.job_id for j in store.ready_jobs()} == {'train'}
+    store.update_jobs({'train': {'status': JobStatus.DONE}})
+    assert {j.job_id for j in store.ready_jobs()} == {'eval'}
+    store.update_jobs({'eval': {'status': JobStatus.FAILED}})
+    assert {j.job_id for j in store.ready_jobs()} == {'gate'}
+
+
+def test_terminal_barrier_stays_done_for_unrecoverable_eval(tmp_path):
+    store = SQLiteJobStore(tmp_path/'jobs.sqlite')
+    store.import_jobs([
+        job('eval', status=JobStatus.FAILED),
+        job('gate', action=Action.TERMINAL_BARRIER, deps=('eval',),
+            deps_mode='terminal', status=JobStatus.DONE),
+    ])
+    store.update_jobs({'eval': {'attempt': 3}})
+    assert store.load_jobs()[1].status == JobStatus.DONE
+
+
 def test_network_authority_refused(monkeypatch):
     monkeypatch.setattr(Path, 'read_text', lambda self: '1 0 0:1 / / rw - overlay overlay rw\n'
                         '2 1 0:2 / /work/shared rw - wekafs remote rw\n')

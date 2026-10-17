@@ -18,6 +18,7 @@ from eval_scheduler.locking import PlanLock
 from eval_scheduler.model import Action, Job, JobStatus, read_plan, write_plan
 from eval_scheduler.runtime import checkpoint_ready
 from scripts.schedule_identity_final_ema_full import canonical_log_dir
+from utils.training_safety import check_training_pins
 
 SOURCE_PLAN = ROOT / 'logs/scheduler/dfm8_XXL_1epoch_steps50k_100k_persistent_vllm_20260725'
 TEMPLATE_PREFIX = 'dfm11-xl-e10-epoch_10-'
@@ -256,8 +257,7 @@ def bootstrap(plan, manifest, monitor=False):
         receipt=load(plan/'preflight.json')
         if receipt['run_policy_sha256']!=run_policy_hash(manifest):
             raise ValueError('Existing plan run manifest drift')
-        if any(file_hash(p)!=sha for p,sha in receipt['pins'].items()):
-            raise ValueError('Existing plan implementation drift')
+        check_training_pins(receipt['pins'], audit_path=plan/'code-provenance.jsonl')
         while not data_ready(manifest):
             if (plan/'stop.request').exists():
                 print('Manual stop present; bootstrap will not start scheduler',flush=True)
@@ -271,8 +271,9 @@ def bootstrap(plan, manifest, monitor=False):
 
 def segment(plan, manifest, command):
     receipt = load(plan/'preflight.json')
-    if receipt['run_policy_sha256']!=run_policy_hash(manifest) or any(file_hash(p)!=sha for p,sha in receipt['pins'].items()):
-        raise ValueError('Prepared training inputs/launcher drift')
+    if receipt['run_policy_sha256']!=run_policy_hash(manifest):
+        raise ValueError('Prepared training policy changed')
+    check_training_pins(receipt['pins'], audit_path=plan/'code-provenance.jsonl')
     # Freeze the validated policy before training: later queued-policy edits
     # must not invalidate a successfully completed segment.
     run = read_run(manifest)

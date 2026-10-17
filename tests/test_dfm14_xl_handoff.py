@@ -123,6 +123,7 @@ def test_exact_reset_preserves_optimizer_step_and_original():
 def test_actual_parent_fraction_and_final():
     assert h.display_epoch(10.8123, {'global_row_cursor_in_epoch': 25}, 100) == pytest.approx(11.0623)
     assert h.display_epoch(10.8123, {'global_row_cursor_in_epoch': 99}, 100, True) == pytest.approx(11.8123)
+    assert h.display_epoch(10.8123, {'step': 3768319, 'epoch': 1}, 100, True) == pytest.approx(11.8123)
     with pytest.raises(ValueError):
         h.display_epoch(10.8, {'global_row_cursor_in_epoch': 101}, 100)
 

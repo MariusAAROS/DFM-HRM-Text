@@ -4,12 +4,85 @@ title: Local XXL-wide Scheduler Handoffs
 description: Verified local SQLite migration, evaluation repairs, and cooperative CUDA suspension handoffs.
 tags: [evaluation, scheduler, training, suspension]
 status: stable
-last_updated: 2026-10-13
+last_updated: 2026-10-17
 confidence: high
 ---
 # Local XXL-wide Scheduler Handoffs
 
 Runtime guidance is in the [request-shared scheduler runbook](request-shared-eval-scheduler.md).
+
+### 2026-10-17: Submodule publication blocker
+
+Resolved on recheck the same day: the remote now supplies `d7605ea`, and
+`git submodule update --init --recursive dfm-evals` completed successfully.
+The unavailable-pin status below is superseded; the installed evaluator now
+matches main's pin.
+
+Pulling main through `36c5584` succeeded without conflicts using
+`git -c fetch.recurseSubmodules=false pull --no-rebase` after recursive fetch
+failed. That revision pins `dfm-evals` to `d7605ea5efb4f30f2e442a2c639b3e59dbc41602`,
+which the configured schneiderkamplab remote rejects with `not our ref`.
+`git submodule update --init --recursive` also fails on that pin. The local
+submodule remains at `1789d64`; do not stage it as a rollback. Publish the
+missing commit from its originating repository, then repeat submodule update.
+Main and the installed evaluator are not yet fully synchronized.
+
+### 2026-10-17: Repair of the 1.1M path failures
+
+Later verification supersedes the pending-restoration status below: repair
+finalization completed and generation 6 restored successfully. Training reached
+1,120,850 before filesystem access failed (`PermissionError` on
+`/work/dfm/HRM-Text`) at 05:55. The scheduler failed on the same path. A new
+machine session lacked the local `/tmp` database; its 05:54 shared backup passed
+SQLite integrity checking and was restored to the same local database path.
+Only the interrupted 1,150K training row was reset, with resume tag
+`ephemeral_step_1120500` (sidecar, DCP metadata and eight shards present).
+All its recovery dependencies were already done. The attempted fresh launch
+then failed before checkpoint loading because W&B credentials were absent in
+the new session. Reauthenticate before retrying; do not disable logging or
+rerun completed evaluations.
+
+After user reauthentication, the same row was retried. The original CLI still
+contained passed suspension boundaries (1.05M and 1.1M), causing a ready-only
+pause at 1,120,501. Requesting supervisor restoration without an offload receipt
+triggered its disk fallback, not an in-memory resume. The fallback checkpoint
+loaded successfully with consumed boundaries removed; progress beyond 1,120,501
+was verified. For future fresh launches, prune already-passed CLI suspension
+boundaries before launching; do not request an offload restore for a ready-only
+pause. Rich monitoring was recreated in `hrm-0:4` with a 30-second refresh.
+
+The missing-path issue below was repaired without changing shared held-out pins.
+`python -m scripts.localize_dfm14_eval` generates machine-local configuration
+under `data/dfm14/evaluation/local-config`, verifying each selected/input file's
+SHA256 before substituting paths. Shared configuration had pointed at the other
+machine's `/work/mimir/HRM-Text` tree. Future pending rows now use the localized
+configuration too.
+
+Training cooperatively suspended at 1,118,800 (generation 6), wrote its fallback
+checkpoint, and offloaded all eight workers. All 128 failed inference shards
+then completed successfully, as did their task merges. Final averaging was
+still running at verification; training restoration was not yet confirmed.
+All nine checkpoint average jobs were reset to depend on the repaired merges,
+avoiding publication of premature incomplete averages. The terminal recovery
+gate permits training continuation even if finalization fails.
+
+`scripts/repair_1100k_eval_handoff.py` records the one-off machine-specific
+recovery, not a reusable resume command. Do not replay it against the live plan;
+it requires explicit `--execute`. SQLite is authoritative, with plan.tsv exported
+as a snapshot after edits. Use the cooperative supervisor, not a second torchrun.
+
+### 2026-10-16: 1.1M evaluation handoff
+
+Verified automatic generation-5 restoration at step 1,100,000, followed by
+training progress through 1,100,020 on all eight GPUs. The
+`xxlw-dfm14-train-1150000-evals-terminal` gate completed with 919 successful
+and 128 failed inference dependencies; the 1,150K training boundary is running.
+Failed DFM shards (an inspected DaLA shard references missing
+`/work/mimir/HRM-Text/evaluation`) and blocked publication rows did not prevent
+training continuation. These failures still need separate repair; the checkpoint
+evaluation is not complete. No manual restore or plan change was necessary.
+Post-resume step deltas were about 2.9 seconds/step; tqdm's smoothed rate includes
+the suspension and is not a valid immediate training-speed estimate.
 
 ### 2026-10-12: Early 1M supplement handoff
 

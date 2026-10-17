@@ -1,5 +1,10 @@
 # Model Architecture Concepts
 
+* [Portable App Packaging History](mimir-app-packaging-history.md) - Platform integration, feedback and compaction history.
+* [App Model Catalog and Release History](mimir-app-model-catalog-history.md) - Model discovery, tokenizer fixes and releases.
+* [App UI and Generation Defaults](mimir-app-ui-defaults.md) - Sampling, branding and presentation defaults.
+* [Native CLI Distribution](mimir-native-cli-distribution.md) - Native and llama.cpp packaging and qualification.
+
 * [SQLite and Request-Shared Evaluation Scheduler](request-shared-eval-scheduler.md) - Opt-in durable job storage, CPU-limited clients, async inference sharing, and migration safety.
 * [Local XXL-wide Scheduler Handoffs](xxl-wide-scheduler-handoffs.md) - Local migration, evaluation repairs, verified suspension and restore history.
 

@@ -19,6 +19,7 @@ from scripts import schedule_dfm12_xl_epoch11 as base
 from scripts.schedule_dfm13_xl_handoff import replace_tree
 from scripts.schedule_dfm13_wave34_baseline import check_graph
 from scripts.stop_training_at_complete_checkpoint import complete, preserve
+from utils.training_safety import check_training_pins
 
 START, CONTROL, SOURCE, OUTPUT = prep.START, prep.CONTROL, prep.SOURCE, prep.OUTPUT
 PLAN = base.PLAN
@@ -239,18 +240,75 @@ def install(plan=PLAN, control=CONTROL):
 
 
 def display_epoch(parent_epoch, state, rows, final=False):
+    if final:
+        # Epoch checkpoints have no in-epoch cursor: the completed pass is exact.
+        return float(parent_epoch) + 1.0
     cursor = state['global_row_cursor_in_epoch']
     if not 0 <= cursor <= rows:
         raise ValueError('Invalid DFM14 row cursor')
-    return float(parent_epoch) + (1.0 if final else cursor / rows)
+    return float(parent_epoch) + cursor / rows
+
+
+def validate_contract(control):
+    receipt = load(control / 'installed.json')
+    if receipt['prepared_sha256'] != file_hash(control / 'prepared.json'):
+        raise ValueError('Prepared training budget/data contract changed')
+    check_training_pins(receipt['pins'], audit_path=control / 'code-provenance.jsonl')
+    return read_prepared(control)
+
+
+def validate_command(command, run, metadata):
+    values = dict(x.split('=', 1) for x in command if '=' in x and not x.startswith('--'))
+    required = {'data': 'dfm14', 'data.path': run['dataset'],
+                'arch/size@arch': 'XL', 'global_batch_size': '262144',
+                'gradient_accumulation_steps': '2', 'epochs': '1',
+                'training_total_steps': str(run['end_step']),
+                'checkpoint_path': run['checkpoint_path'],
+                'wandb_run_id': run['wandb_run_id'], 'project_name': run['wandb_project']}
+    for key, value in metadata.get('approved_lr_schedule', {}).items():
+        required[key] = str(value).lower() if isinstance(value, bool) else str(value)
+    numeric = {'global_batch_size', 'gradient_accumulation_steps', 'epochs', 'training_total_steps'}
+    numeric.update(k for k, v in metadata.get('approved_lr_schedule', {}).items()
+                   if type(v) in (int, float))
+    for key, expected in required.items():
+        actual = values.get(key)
+        # Equivalent numeric spellings (3e-4 vs 0.0003) are not policy changes.
+        if actual != expected:
+            try:
+                equal = key in numeric and float(actual) == float(expected)
+            except (ValueError, TypeError):
+                equal = False
+            if not equal:
+                raise ValueError(f'Training command contract mismatch: {key}: {actual!r} != {expected!r}')
+
+
+def preflight(plan, control):
+    """Validate future commands without starting workers or requiring future checkpoints."""
+    run = validate_contract(control)
+    with PlanLock(plan):
+        jobs = read_plan(plan / 'plan.tsv')
+    checked = []
+    for job in jobs:
+        if (not job.job_id.startswith('dfm14-xl-') or job.action != Action.TRAIN_UNTIL_STEP
+                or job.status not in (JobStatus.PENDING, JobStatus.RUNNING)):
+            continue
+        co = job.metadata.get('cooperative_training')
+        command = co['command'] if co else training_arguments(run, [])
+        if isinstance(command, str):
+            command = shlex.split(command)
+        validate_command(command, run, job.metadata)
+        target = int(job.metadata['stop_after_step'])
+        if target > run['end_step'] + 1:
+            raise ValueError('Training target exceeds the prepared epoch budget')
+        checked.append(job.job_id)
+    if not checked:
+        raise ValueError('No active or pending DFM14 XL training rows found')
+    print('Training preflight passed: ' + ', '.join(checked), flush=True)
+    return checked
 
 
 def segment(plan, control, overrides):
-    receipt = load(control / 'installed.json')
-    if (receipt['prepared_sha256'] != file_hash(control / 'prepared.json')
-            or any(file_hash(p) != sha for p, sha in receipt['pins'].items())):
-        raise ValueError('Handoff implementation/budget drift')
-    run = read_prepared(control)
+    run = validate_contract(control)
     values = dict(x.split('=', 1) for x in overrides)
     target = int(values['stop_after_step'])
     with PlanLock(plan):
@@ -270,9 +328,24 @@ def segment(plan, control, overrides):
     if values['resume_checkpoint_tag'] == f'step_{START}':
         values['resume_checkpoint_path'] = str(fresh_resume(control))
     command = training_arguments(run, [f'{k}={v}' for k, v in values.items()])
+    validate_command(command, run, current.metadata)
+    if not complete(Path(values['resume_checkpoint_path']), values['resume_checkpoint_tag']):
+        raise ValueError('Incomplete resume checkpoint')
     base.gpu_gate(subprocess.check_output(['nvidia-smi', '--query-gpu=index,memory.free',
                                           '--format=csv,noheader,nounits'], text=True))
     subprocess.run(command, cwd=ROOT, check=True)
+    finalize(plan, control, target)
+
+
+def finalize(plan, control, target):
+    """Finalize the checkpoint axis after either disk exit or verified offload."""
+    run = validate_contract(control)
+    with PlanLock(plan):
+        parent = next(j for j in read_plan(plan / 'plan.tsv')
+                      if boundary(j) == START and j.action == Action.EXPORT_HF)
+        if parent.status != JobStatus.DONE or parent.metadata.get('dfm13_cursor_epoch_pending'):
+            raise ValueError('Actual3250 display epoch not finalized')
+        parent_epoch = parent.metadata['eval_epoch']
     tag = 'epoch_1' if target > run['end_step'] else f'step_{target}'
     if not complete(OUTPUT, tag):
         raise ValueError('Output checkpoint incomplete')
@@ -313,7 +386,7 @@ def wait_prepared(control):
 
 def main():
     parser = argparse.ArgumentParser(__doc__)
-    parser.add_argument('mode', choices=['preview', 'arm', 'install', 'watch', 'segment'])
+    parser.add_argument('mode', choices=['preview', 'arm', 'install', 'watch', 'segment', 'finalize', 'preflight'])
     parser.add_argument('--plan-dir', type=Path, default=PLAN)
     parser.add_argument('--control', type=Path, default=CONTROL)
     args, rest = parser.parse_known_args()
@@ -322,8 +395,14 @@ def main():
     os.environ['OMP_NUM_THREADS'] = os.environ['MKL_NUM_THREADS'] = '1'
     if args.mode == 'segment':
         return segment(args.plan_dir, args.control, rest)
+    if args.mode == 'finalize':
+        if len(rest) != 1 or not rest[0].startswith('stop_after_step='):
+            parser.error('finalize requires stop_after_step=N')
+        return finalize(args.plan_dir, args.control, int(rest[0].split('=', 1)[1]))
     if rest:
         parser.error('Unexpected arguments')
+    if args.mode == 'preflight':
+        return preflight(args.plan_dir, args.control)
     if args.mode == 'preview':
         with PlanLock(args.plan_dir):
             jobs = read_plan(args.plan_dir / 'plan.tsv')

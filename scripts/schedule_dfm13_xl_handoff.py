@@ -18,6 +18,7 @@ from eval_scheduler.model import Action, Job, JobStatus, read_plan, write_plan
 from scripts import prepare_dfm13_xl_handoff as prep
 from scripts import schedule_dfm12_xl_epoch11 as old
 from scripts.stop_training_at_complete_checkpoint import complete, preserve
+from utils.training_safety import check_training_pins
 
 START = prep.START
 CONTROL = prep.CONTROL
@@ -255,8 +256,9 @@ def display_epoch(parent_state,parent_rows,state,rows,final=False):
 
 def segment(plan,control,overrides):
     receipt=load(control/'scheduler-installed.json')
-    if receipt['prepared_sha256']!=file_hash(control/'prepared.json') or any(file_hash(p)!=sha for p,sha in receipt['pins'].items()):
-        raise ValueError('Handoff implementation/budget pins changed')
+    if receipt['prepared_sha256']!=file_hash(control/'prepared.json'):
+        raise ValueError('Prepared training budget/data contract changed')
+    check_training_pins(receipt['pins'], audit_path=control/'code-provenance.jsonl')
     run=read_prepared(control)
     values=dict(x.split('=',1) for x in overrides)
     target=int(values['stop_after_step'])

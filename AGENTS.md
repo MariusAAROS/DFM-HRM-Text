@@ -34,6 +34,7 @@ If new information contradicts an existing page, do not silently overwrite it. M
 ## Eval Scheduler Runner Launch
 
 - **Training continuity is mandatory**: failed evals, unfinished merges/averages/syncs, and abandoned administrative locks must not strand training. Release edit locks before stepping away and verify the handoff actually starts. Respect explicit user pauses and GPU/checkpoint safety. See [training continuity](wiki/pages/training-continuity.md).
+- Training code hashes are warning-only provenance, not resume gates. Preserve data/checkpoint/configuration checks and run the continuation preflight after launch changes; see [training continuity](wiki/pages/training-continuity.md).
 
 - **CRITICAL**: Prepend `PATH="/home/ucloud/miniforge3/envs/hrm/bin:$PATH"` so `torchrun` and `ninja` are on PATH.
 - Always use `--persistent-vllm` for efficiency (reuses vLLM servers across eval shards).

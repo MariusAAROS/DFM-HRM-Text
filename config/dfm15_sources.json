@@ -1,0 +1,751 @@
+{
+  "inherits": "dfm14",
+  "base": "data/dfm15/native-reasoning-v2/sampled_dfm15",
+  "additions": [
+    {
+      "name": "faroese-dyna-instruct",
+      "repo_id": "danish-foundation-models/faroese-dyna-instruct",
+      "revision": "a27cb2696d6fd2285d73e4bae04aa87e1bd26b1f",
+      "rows": 1008797,
+      "tokens": 75274250,
+      "sequences_over_4096": 614,
+      "tokenized_path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized",
+      "repeat": 1,
+      "sampled": false,
+      "cross_corpus_exact_overlap_checked": false,
+      "selected_rows": 1008797,
+      "selected_tokens": 75274250,
+      "duplicate_rows_excluded": 0,
+      "selected_sequences_over_4096": 614,
+      "parts": [
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00000.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00000.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00001.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00001.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00002.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00002.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00003.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00003.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00004.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00004.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00005.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00005.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00006.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00006.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00007.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00007.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00008.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00008.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00009.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00009.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00010.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00010.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00011.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00011.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00012.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00012.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00013.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00013.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00014.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00014.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00015.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00015.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00016.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00016.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00017.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00017.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00018.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00018.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00019.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00019.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00020.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00020.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00021.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00021.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00022.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00022.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00023.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00023.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00024.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00024.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00025.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00025.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00026.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00026.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00027.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00027.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00028.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00028.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00029.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00029.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00030.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00030.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00031.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00031.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00032.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00032.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00033.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00033.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00034.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00034.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00035.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00035.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00036.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00036.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00037.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00037.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00038.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00038.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00039.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00039.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00040.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00040.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00041.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00041.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00042.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00042.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00043.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00043.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00044.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00044.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00045.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00045.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00046.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00046.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00047.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00047.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00048.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00048.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00049.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00049.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00050.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00050.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00051.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00051.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00052.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00052.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00053.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00053.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00054.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00054.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00055.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00055.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00056.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00056.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00057.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00057.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00058.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00058.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00059.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00059.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00060.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00060.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00061.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00061.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00062.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00062.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00063.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00063.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00064.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00064.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00065.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00065.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00066.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00066.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00067.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00067.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00068.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00068.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00069.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00069.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00070.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00070.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00071.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00071.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00072.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00072.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00073.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00073.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00074.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00074.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00075.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00075.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00076.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00076.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00077.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00077.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00078.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00078.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00079.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00079.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00080.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00080.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00081.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00081.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00082.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00082.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00083.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00083.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00084.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00084.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00085.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00085.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00086.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00086.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00087.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00087.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00088.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00088.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00089.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00089.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00090.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00090.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00091.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00091.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00092.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00092.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00093.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00093.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00094.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00094.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00095.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00095.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00096.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00096.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00097.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00097.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00098.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00098.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00099.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00099.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/tokenized/part-00100.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/faroese-dyna-instruct/selection/part-00100.npy"
+        }
+      ]
+    },
+    {
+      "name": "icelandic-dyna-instruct",
+      "repo_id": "danish-foundation-models/icelandic-dyna-instruct",
+      "revision": "650c1e80c8f91fece52348b8f80cf16e726e0844",
+      "rows": 610104,
+      "tokens": 100239190,
+      "sequences_over_4096": 1824,
+      "tokenized_path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized",
+      "repeat": 1,
+      "sampled": false,
+      "cross_corpus_exact_overlap_checked": false,
+      "selected_rows": 610104,
+      "selected_tokens": 100239190,
+      "duplicate_rows_excluded": 0,
+      "selected_sequences_over_4096": 1824,
+      "parts": [
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00000.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00000.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00001.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00001.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00002.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00002.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00003.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00003.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00004.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00004.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00005.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00005.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00006.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00006.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00007.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00007.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00008.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00008.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00009.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00009.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00010.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00010.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00011.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00011.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00012.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00012.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00013.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00013.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00014.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00014.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00015.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00015.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00016.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00016.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00017.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00017.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00018.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00018.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00019.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00019.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00020.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00020.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00021.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00021.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00022.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00022.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00023.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00023.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00024.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00024.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00025.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00025.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00026.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00026.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00027.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00027.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00028.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00028.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00029.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00029.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00030.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00030.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00031.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00031.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00032.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00032.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00033.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00033.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00034.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00034.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00035.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00035.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00036.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00036.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00037.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00037.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00038.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00038.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00039.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00039.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00040.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00040.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00041.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00041.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00042.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00042.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00043.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00043.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00044.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00044.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00045.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00045.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00046.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00046.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00047.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00047.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00048.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00048.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00049.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00049.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00050.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00050.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00051.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00051.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00052.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00052.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00053.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00053.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00054.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00054.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00055.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00055.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00056.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00056.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00057.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00057.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00058.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00058.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00059.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00059.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00060.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00060.npy"
+        },
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/tokenized/part-00061.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/dyna-instruct/icelandic-dyna-instruct/selection/part-00061.npy"
+        }
+      ]
+    },
+    {
+      "name": "gsm-symbolic-en-train",
+      "repo_id": "danish-foundation-models/multilingual-gsm-symbolic",
+      "revision": "75ce20d919d93ba78340adc6f70d2120f3ca3ce3",
+      "selected_files": [
+        "data/eng/train_synthetic-00000-of-00001.parquet"
+      ],
+      "rows": 3799,
+      "tokens": 682844,
+      "internal_duplicates_removed": 21,
+      "sequences_over_4096": 0,
+      "tokenized_path": "/work/dfm/HRM-Text/data/dfm15/small-additions/gsm-symbolic-en-train/tokenized",
+      "repeat": 1,
+      "sampled": false,
+      "enable_thinking": true,
+      "cross_corpus_exact_overlap_checked": false,
+      "selected_rows": 3799,
+      "selected_tokens": 682844,
+      "duplicate_rows_excluded": 0,
+      "selected_sequences_over_4096": 0,
+      "parts": [
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/small-additions/gsm-symbolic-en-train/tokenized/train.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/small-additions/gsm-symbolic-en-train/selection/train.npy"
+        }
+      ]
+    },
+    {
+      "name": "linguistic-quality-da",
+      "repo_id": "danish-foundation-models/linguistic-quality",
+      "revision": "884c73cce486243ff2b17bf26b5c22abd25bc73f",
+      "selected_files": [
+        "train.parquet"
+      ],
+      "rows": 615,
+      "tokens": 101629,
+      "internal_duplicates_removed": 0,
+      "sequences_over_4096": 0,
+      "tokenized_path": "/work/dfm/HRM-Text/data/dfm15/small-additions/linguistic-quality-da/tokenized",
+      "repeat": 1,
+      "sampled": false,
+      "enable_thinking": false,
+      "cross_corpus_exact_overlap_checked": false,
+      "selected_rows": 615,
+      "selected_tokens": 101629,
+      "duplicate_rows_excluded": 0,
+      "selected_sequences_over_4096": 0,
+      "parts": [
+        {
+          "path": "/work/dfm/HRM-Text/data/dfm15/small-additions/linguistic-quality-da/tokenized/train.jsonl",
+          "selection": "/work/dfm/HRM-Text/data/dfm15/small-additions/linguistic-quality-da/selection/train.npy"
+        }
+      ]
+    }
+  ],
+  "status": "tokenized_staging_not_resampled",
+  "selection_policy": "Use each part selection index; do not sample unfiltered backing rows",
+  "full_cross_corpus_row_overlap_checked": false
+}
