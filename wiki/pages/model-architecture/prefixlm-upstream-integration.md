@@ -128,3 +128,27 @@ Apple application packages are not rebuilt or released by this integration.
 Knowledge validation: uv run --no-project --with pyyaml python scripts/validate_okf.py wiki
 completed with zero errors and 15 pre-existing missing-local-link warnings.
 Use --no-project here to avoid installing the training project dependencies.
+
+## Upstream published binary matrix (2026-10-17)
+
+Verified actual assets of https://github.com/ggml-org/llama.cpp/releases/tag/b11706
+against its release workflow and Snapdragon presets (both match the integrated
+source files byte-for-byte). GitHub's releases/latest instead points to v0.7.0,
+which currently contains only nightly-tag.txt; use the numbered build release.
+
+- macOS: ARM64 CPU/Metal; x64 CPU (Metal explicitly disabled).
+- Ubuntu x64: CPU, Vulkan, CUDA 12.8/13.4, ROCm 10.0, SYCL FP16/FP32,
+  OpenVINO 2026.4.1.
+- Ubuntu ARM64: CPU, Vulkan, CUDA 13.4; Ubuntu s390x: CPU.
+- Linux ARM64 Snapdragon: OpenCL GPU and Hexagon NPU (release command overrides
+  the preset's OpenCL OFF to ON).
+- Windows x64: CPU, Vulkan, CUDA 12.4/13.4, ROCm 10.0, SYCL, OpenVINO 2026.4.1.
+- Windows ARM64: CPU, Vulkan, CUDA 13.4, Adreno OpenCL. No Windows Hexagon
+  package appears in this release.
+- Android ARM64: generic CPU; Snapdragon OpenCL GPU plus Hexagon NPU.
+- Additional assets: six CUDA runtime archives, web UI, Apple XCFramework
+  built for macOS and iOS devices (not simulator).
+
+These are published packages, not evidence that our PrefixLM/MixedLM execution
+has been qualified on each accelerator. Reusing upstream packaging is preferable
+to maintaining an independent matrix; hardware validation remains separate.
