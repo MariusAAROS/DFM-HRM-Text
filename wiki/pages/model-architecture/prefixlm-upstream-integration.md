@@ -219,3 +219,11 @@ warnings, leak detection or ASan. It does not establish shared-package ASan
 startup cleanliness: that upstream linkage limitation remains unresolved.
 Release qualification and published package linkage remain unchanged. No fork
 runtime changes or release-matrix restart are needed for this CI-only adjustment.
+
+Follow-up run https://github.com/schneiderkamplab/HRM-Text/actions/runs/39005968713
+passed both GCC shared Release and Clang static ASan qualification on 2026-10-17.
+Both jobs passed the five CTest suites, three ordinary architecture cases and
+CLI/server/benchmark startup checks. ASan retained halt_on_error=1:detect_leaks=1.
+The shared-library ASan limitation above is not superseded by this static result.
+At 05:35 UTC the release matrix 39005077796 had 22 successful jobs, no failures,
+and eight CUDA/ROCm jobs still running; publication remained pending.
