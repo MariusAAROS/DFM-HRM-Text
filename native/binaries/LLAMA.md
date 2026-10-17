@@ -10,7 +10,7 @@ backend plugins, licenses, a source manifest and build-host device enumeration.
 Download an official GGUF from danish-foundation-models/DFM-Mimir-v1.5-GGUF.
 Keep all extracted files together. Use the model's embedded chat template:
 
-    ./llama-cli -m /path/to/model.gguf --attention prefix-lm -cnv
+    ./llama-cli -m /path/to/model.gguf --attention prefix-lm
     ./llama-server -m /path/to/model.gguf --attention prefix-lm --host 127.0.0.1 --port 8080
 
 The server offers an OpenAI-compatible local API; it does not use OpenAI services.

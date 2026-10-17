@@ -2891,3 +2891,5 @@ Infinity/IndustryInstruction preparation in [BAAI access](pages/dfm14-baai-acces
 Added the [shared audit runbook](pages/shared-audit-pipeline.md): compact
 non-thinking decisions, bounded continuous refill and dedicated CPU/disk owners.
 Historical journals and accepted rows are preserved during client migration.
+
+- 2026-10-17: Added the scoped PrefixLM/MixedLM upstream integration runbook, API adaptation and CPU/Metal qualification evidence; unrelated persistence, Vulkan and ggml changes follow upstream.

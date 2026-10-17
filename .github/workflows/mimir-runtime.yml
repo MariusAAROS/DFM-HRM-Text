@@ -4,6 +4,10 @@ on:
     paths: ['native/mimir/**', 'llama.cpp', 'scripts/prefixlm_comparison/**', '.github/workflows/mimir-runtime.yml']
   workflow_dispatch:
     inputs:
+      core_only:
+        description: 'Qualify standalone PrefixLM/MixedLM upstream integration'
+        type: boolean
+        default: false
       cuda:
         description: 'Run on the trusted self-hosted Linux CUDA runner'
         type: boolean
@@ -12,6 +16,7 @@ permissions:
   contents: read
 jobs:
   cpu:
+    if: ${{ !inputs.core_only }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -90,7 +95,7 @@ jobs:
             logs/mimir-parser/Testing/Temporary
 
   cuda:
-    if: github.event_name == 'workflow_dispatch' && inputs.cuda
+    if: github.event_name == 'workflow_dispatch' && inputs.cuda && !inputs.core_only
     runs-on: [self-hosted, linux, x64, cuda]
     concurrency:
       group: mimir-cuda-qualification
@@ -144,3 +149,40 @@ jobs:
           path: |
             logs/mimir-runtime/cuda/Testing/Temporary
             logs/mimir-final
+
+  core:
+    if: github.event_name == 'workflow_dispatch' && inputs.core_only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [release, asan]
+    env:
+      ASAN_OPTIONS: halt_on_error=1:detect_leaks=1
+    steps:
+      - uses: actions/checkout@v4
+      - run: git submodule update --init llama.cpp
+      - name: Build standalone core and tools
+        shell: bash
+        run: |
+          flags=()
+          if [ '${{ matrix.mode }}' = asan ]; then
+            flags+=("-DCMAKE_C_FLAGS=-fsanitize=address -fno-omit-frame-pointer")
+            flags+=("-DCMAKE_CXX_FLAGS=-fsanitize=address -fno-omit-frame-pointer")
+          fi
+          cmake -S llama.cpp -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo             -DGGML_NATIVE=OFF -DGGML_OPENMP=OFF -DLLAMA_OPENSSL=OFF             -DLLAMA_BUILD_APP=OFF -DLLAMA_BUILD_TESTS=ON "${flags[@]}"
+          cmake --build build --parallel 3 --target test-llama-archs test-batch-alloc test-sampling test-chat llama-cli llama-server llama-bench llama-quantize
+      - name: Exercise legacy and extended APIs
+        shell: bash
+        run: |
+          ctest --test-dir build --output-on-failure -R '^(test-prefix-lm-.*|test-batch-alloc|test-sampling|test-chat)$'
+          build/bin/test-llama-archs -a '^(llama|hrm_text)$' --seed 42
+          build/bin/llama-cli --help
+          build/bin/llama-server --help
+          build/bin/llama-bench --help
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: upstream-core-${{ matrix.mode }}
+          path: build/Testing/Temporary/

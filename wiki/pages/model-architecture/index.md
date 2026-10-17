@@ -53,3 +53,5 @@
 * [Optional Mimir web search](mimir-search.md) - Search consent, private key mapping, app focus and stock-prompt updates for unreleased 0.1.4.
 
 * [DFM Mimir v1.5 GGUFs](mimir-v1.5-ggufs.md) - Conversion, tokenizer/template checks and official GGUF publication.
+
+* [PrefixLM and MixedLM upstream integration](prefixlm-upstream-integration.md) - Scoped upstream port, extended batch API, regression evidence and release gates.
