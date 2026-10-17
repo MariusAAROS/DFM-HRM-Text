@@ -4,12 +4,47 @@ title: Local XXL-wide Scheduler Handoffs
 description: Verified local SQLite migration, evaluation repairs, and cooperative CUDA suspension handoffs.
 tags: [evaluation, scheduler, training, suspension]
 status: stable
-last_updated: 2026-10-13
+last_updated: 2026-10-17
 confidence: high
 ---
 # Local XXL-wide Scheduler Handoffs
 
 Runtime guidance is in the [request-shared scheduler runbook](request-shared-eval-scheduler.md).
+
+### 2026-10-17: Repair of the 1.1M path failures
+
+The missing-path issue below was repaired without changing shared held-out pins.
+`python -m scripts.localize_dfm14_eval` generates machine-local configuration
+under `data/dfm14/evaluation/local-config`, verifying each selected/input file's
+SHA256 before substituting paths. Shared configuration had pointed at the other
+machine's `/work/mimir/HRM-Text` tree. Future pending rows now use the localized
+configuration too.
+
+Training cooperatively suspended at 1,118,800 (generation 6), wrote its fallback
+checkpoint, and offloaded all eight workers. All 128 failed inference shards
+then completed successfully, as did their task merges. Final averaging was
+still running at verification; training restoration was not yet confirmed.
+All nine checkpoint average jobs were reset to depend on the repaired merges,
+avoiding publication of premature incomplete averages. The terminal recovery
+gate permits training continuation even if finalization fails.
+
+`scripts/repair_1100k_eval_handoff.py` records the one-off machine-specific
+recovery, not a reusable resume command. Do not replay it against the live plan;
+it requires explicit `--execute`. SQLite is authoritative, with plan.tsv exported
+as a snapshot after edits. Use the cooperative supervisor, not a second torchrun.
+
+### 2026-10-16: 1.1M evaluation handoff
+
+Verified automatic generation-5 restoration at step 1,100,000, followed by
+training progress through 1,100,020 on all eight GPUs. The
+`xxlw-dfm14-train-1150000-evals-terminal` gate completed with 919 successful
+and 128 failed inference dependencies; the 1,150K training boundary is running.
+Failed DFM shards (an inspected DaLA shard references missing
+`/work/mimir/HRM-Text/evaluation`) and blocked publication rows did not prevent
+training continuation. These failures still need separate repair; the checkpoint
+evaluation is not complete. No manual restore or plan change was necessary.
+Post-resume step deltas were about 2.9 seconds/step; tqdm's smoothed rate includes
+the suspension and is not a valid immediate training-speed estimate.
 
 ### 2026-10-12: Early 1M supplement handoff
 
