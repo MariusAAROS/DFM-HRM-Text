@@ -168,6 +168,7 @@ jobs:
         run: |
           flags=()
           if [ '${{ matrix.mode }}' = asan ]; then
+            export CC=clang CXX=clang++
             flags+=("-DCMAKE_C_FLAGS=-fsanitize=address -fno-omit-frame-pointer")
             flags+=("-DCMAKE_CXX_FLAGS=-fsanitize=address -fno-omit-frame-pointer")
           fi

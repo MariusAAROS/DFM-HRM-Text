@@ -189,3 +189,18 @@ passed for CLI, server, benchmark, quantizer and test-llama-archs. The Linux cor
 qualification workflow now also sets LLAMA_FATAL_WARNINGS=ON. Release jobs are
 regenerated from the updated fork pin; no compiler warning suppression is used.
 Both local CTest PrefixLM suites (HRMText and Llama) passed after this rebuild.
+
+### Strict Linux qualification follow-up
+
+Run 39003866775 exposed another warning in the PrefixLM test: GCC rejects a
+copied range-loop pair under -Werror=range-loop-construct. Commit 1c979346d
+uses a const reference; production runtime code is unchanged. Local strict
+test compilation and both PrefixLM suites passed after the adjustment.
+
+The ASan job also stopped during compilation on GCC 13 libstdc++ regex internals
+with -Werror=maybe-uninitialized, before exercising our tests. ASan qualification
+now uses Clang; the ordinary Release job retains GCC. Both retain fatal warnings,
+and sanitizer flags and leak detection remain enabled. This is a compiler
+selection change, not evidence that GCC ASan execution passed. Release matrix
+39003864987 had no failed jobs at this check, but is superseded by a fresh run
+against the updated test/source pin so distribution and qualification match.
