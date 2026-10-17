@@ -227,3 +227,15 @@ CLI/server/benchmark startup checks. ASan retained halt_on_error=1:detect_leaks=
 The shared-library ASan limitation above is not superseded by this static result.
 At 05:35 UTC the release matrix 39005077796 had 22 successful jobs, no failures,
 and eight CUDA/ROCm jobs still running; publication remained pending.
+
+### Publication recovery
+
+All 30 build/preparation jobs in run 39005077796 passed. The publish job assembled
+the platform archives and SHA256SUMS, then uploaded the 5,002,927,742-byte
+release-packages Actions artifact (12094347352). GitHub returned HTTP 403
+Resource not accessible by integration on release creation; no binary build failed.
+An authenticated maintainer-created draft for mimir-1c979346d targets the exact
+build workflow commit c40ce8cb28d3de9c737daf9f74ed11fc82671761. Only the publish
+job was rerun, reusing all successful build artifacts. Outcome still pending.
+Future generated workflows overwrite their assembled Actions artifact on retry
+and explicitly distinguish static ASan qualification in release notes.
