@@ -174,3 +174,18 @@ See native/binaries/LLAMA.md for operation and package limitations.
 The generator passed YAML parsing, pinned-checkout/dependency validation and
 deterministic regeneration checks. Cross-platform execution remains a CI gate;
 successful packaging must not be confused with GPU/NPU inference qualification.
+
+## Release warning fix (2026-10-17)
+
+Initial matrix run 39003251048 failed Linux CPU x64/ARM64, macOS x64 and generic
+Android builds on the same two signed/unsigned token-count comparisons in
+decode_prefix_lm. Upstream enables LLAMA_FATAL_WARNINGS; earlier qualification
+did not. The run was cancelled before publication to replace the source pin.
+
+Fork commit 4f2e25bcf bounds the token count by INT32_MAX before converting it,
+compares capacities without narrowing, and uses the checked signed count for
+both loops. No attention semantics changed. The local strict Release build
+passed for CLI, server, benchmark, quantizer and test-llama-archs. The Linux core
+qualification workflow now also sets LLAMA_FATAL_WARNINGS=ON. Release jobs are
+regenerated from the updated fork pin; no compiler warning suppression is used.
+Both local CTest PrefixLM suites (HRMText and Llama) passed after this rebuild.
