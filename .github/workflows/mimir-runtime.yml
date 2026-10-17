@@ -7,7 +7,7 @@ on:
       core_only:
         description: 'Qualify standalone PrefixLM/MixedLM upstream integration'
         type: boolean
-        default: false
+        default: true
       cuda:
         description: 'Run on the trusted self-hosted Linux CUDA runner'
         type: boolean
@@ -16,7 +16,7 @@ permissions:
   contents: read
 jobs:
   cpu:
-    if: ${{ !inputs.core_only }}
+    if: github.event_name == 'workflow_dispatch' && !inputs.core_only
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -151,7 +151,7 @@ jobs:
             logs/mimir-final
 
   core:
-    if: github.event_name == 'workflow_dispatch' && inputs.core_only
+    if: github.event_name == 'pull_request' || inputs.core_only
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:

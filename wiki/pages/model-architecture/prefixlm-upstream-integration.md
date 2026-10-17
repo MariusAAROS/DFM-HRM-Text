@@ -78,7 +78,8 @@ Built CLI, server, bench, quantizer, simple/simple-chat examples and selected te
   strict threshold. All 130 top-token choices agree on each backend. No tolerance
   was relaxed. The prior recorded Metal-flash run also failed the same strict
   threshold (maximum 7.294714450836182e-4).
-- Real v1.5 Q4_K_M CLI chat using embedded template: answered “København”.
+- Real v1.5 CLI chat using embedded template: Q4_K_M passed on CPU and Metal;
+  Q8_0 and BF16 passed on Metal. Each answered “København”.
   Upstream CLI no longer accepts -cnv; chat is its native interface.
 - Server OpenAI-compatible chat: cold/warm exact-prefix requests, two concurrent
   slots and multi-turn follow-up passed. Warm cache reported prompt_n=0,
@@ -91,10 +92,14 @@ and /tmp/prefix-{hrm,llama}-upstream.log.
 ## Linux gate and remaining work
 
 Dispatch .github/workflows/mimir-runtime.yml on the integration branch with
-core_only=true. This runs standalone Linux CPU Release and AddressSanitizer
+core_only=true (the default on this branch). Pull requests also use this core
+qualification path. This runs standalone Linux CPU Release and AddressSanitizer
 builds, both PrefixLM suites, ordinary architecture checks and helper tests.
 It does not run the historical app/persistence qualification workflow.
 Initial CI run: https://github.com/schneiderkamplab/HRM-Text/actions/runs/38997326649.
+Linux Release passed: five CTest suites, 1,072 PrefixLM/MixedLM checks for each
+of HRMText and Llama, plus three ordinary CPU architecture cases.
+AddressSanitizer is still in progress.
 
 UBSan is a separate unresolved upstream issue: ggml/src/ggml.c still performs
 null-base pointer arithmetic in incr_ptr_aligned during graph sizing. The old
