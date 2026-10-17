@@ -97,9 +97,11 @@ qualification path. This runs standalone Linux CPU Release and AddressSanitizer
 builds, both PrefixLM suites, ordinary architecture checks and helper tests.
 It does not run the historical app/persistence qualification workflow.
 Initial CI run: https://github.com/schneiderkamplab/HRM-Text/actions/runs/38997326649.
-Linux Release passed: five CTest suites, 1,072 PrefixLM/MixedLM checks for each
-of HRMText and Llama, plus three ordinary CPU architecture cases.
-AddressSanitizer is still in progress.
+Linux Release and AddressSanitizer both passed: five CTest suites per build,
+1,072 PrefixLM/MixedLM checks for each of HRMText and Llama per build, plus
+three ordinary CPU architecture cases per build. ASan used halt_on_error=1
+and detect_leaks=1. CI completed successfully on 2026-10-17; downloaded test
+logs are in logs/upstream-integration/linux-release and linux-asan.
 
 UBSan is a separate unresolved upstream issue: ggml/src/ggml.c still performs
 null-base pointer arithmetic in incr_ptr_aligned during graph sizing. The old
