@@ -239,3 +239,19 @@ build workflow commit c40ce8cb28d3de9c737daf9f74ed11fc82671761. Only the publish
 job was rerun, reusing all successful build artifacts. Outcome still pending.
 Future generated workflows overwrite their assembled Actions artifact on retry
 and explicitly distinguish static ASan qualification in release notes.
+
+Publication completed manually on 2026-10-17:
+https://github.com/schneiderkamplab/HRM-Text/releases/tag/mimir-1c979346d
+contains all 35 upstream-format archives (upstream b11706 names with our tag,
+excluding only s390x), SOURCE.txt and SHA256SUMS: 37 assets total. Every archive
+and SOURCE.txt matched GitHub's uploaded SHA-256 digest against the checksum file.
+The release is public and marked prerelease. Linux Release and static ASan
+qualification passed in run 39005968713.
+
+The publish retry uploaded the real assets but also downloaded the previous
+release-packages artifact, then attempted to upload that aggregate ZIP (>2 GiB).
+The Actions workflow therefore remains failed at publication even though all
+30 build/preparation jobs succeeded. Recovery removed the aggregate entry from
+SHA256SUMS, verified all actual assets, and published using maintainer credentials.
+Generated workflows now exclude release-packages from artifact downloads.
+No binaries were rebuilt or altered during recovery. Monitoring can stop.

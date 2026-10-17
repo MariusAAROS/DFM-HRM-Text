@@ -1712,6 +1712,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           path: ./artifact
+          pattern: '!(release-packages)'
           run-id: ${{ github.run_id }}
           github-token: ${{ github.token }}
           merge-multiple: true
