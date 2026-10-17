@@ -345,6 +345,7 @@ def main() -> None:
     logged_metrics = {f"{args.prefix}/{task_name}/{key}": value for key, value in metrics.items()}
     payload = {
         "epoch": args.epoch,
+        "step": args.step,
         "num_samples": len(samples),
         "metrics": logged_metrics,
         "inputs": [str(path) for path in args.eval],
