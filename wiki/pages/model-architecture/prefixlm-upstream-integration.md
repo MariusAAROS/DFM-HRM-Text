@@ -255,3 +255,41 @@ The Actions workflow therefore remains failed at publication even though all
 SHA256SUMS, verified all actual assets, and published using maintainer credentials.
 Generated workflows now exclude release-packages from artifact downloads.
 No binaries were rebuilt or altered during recovery. Monitoring can stop.
+
+## Downloaded archive validation (2026-10-17)
+
+Tested actual release mimir-1c979346d downloads, not replacement local binaries.
+Checksums matched for macOS ARM64, Ubuntu CPU x64, Ubuntu CUDA 12.8/13.4 x64,
+their two CUDA runtime archives, and Ubuntu Vulkan x64. Test model was official
+v1.5 Q4_K_M, SHA256 82f73664e33a0369d047c69d9cdfe23082028d5539c8a2fbad8d5dbc6256e106
+(identical on Mac and dfm). Chat used the embedded template in CLI/server.
+
+- macOS 27, M2 Max: packaged CLI and server passed on CPU and Metal. Both server
+  runs answered the Danish capital question with København and an English
+  follow-up with Copenhagen. CLI/server/benchmark help and quantizer usage passed.
+- The local test-llama-archs harness loaded the downloaded macOS libraries via
+  DYLD_LIBRARY_PATH; DYLD_PRINT_LIBRARIES confirmed libllama, common and ggml
+  CPU/BLAS/Metal came from the extracted archive. HRMText and Llama each passed
+  2,144 PrefixLM/MixedLM checks. This exercises the packaged implementation,
+  although the test executable itself is locally built.
+- dfm: Ubuntu 24.04, x86_64 AMD EPYC 9655, eight NVIDIA B200 GPUs. Packaged
+  Ubuntu CPU CLI/server passed the same real-model chat and startup checks,
+  using two threads and nice priority 10. Temporary servers were shut down.
+- Both packaged CUDA versions loaded with their matching runtime directories
+  in LD_LIBRARY_PATH and enumerated all eight B200s. This includes CUDA 13.4
+  despite nvidia-smi reporting CUDA UMD 13.3. No inference compatibility claim
+  follows from successful enumeration alone.
+- Vulkan initially lacked libvulkan.so.1. Ubuntu libvulkan1 1.3.275.0-1build1
+  was downloaded and extracted into the test directory, without installing or
+  changing system packages. All plugin dependencies then resolved, but NVIDIA
+  ICD initialization failed: could not obtain vkCreateInstance through
+  vk_icdGetInstanceProcAddr; the loader reported no drivers. No Vulkan device
+  was exposed. Host driver configuration needs investigation outside training.
+
+All GPUs remained at 100% utilization with roughly 164-167 GiB occupied during
+these checks. No GPU inference or benchmark was launched on dfm, and training
+was not paused or modified. CUDA inference and performance qualification remain
+pending a coordinated idle window. Local evidence: logs/release-smoke/;
+remote files: /home/ucloud/mimir-release-smoke/. The smoke harness and JSON
+responses are retained there. These short correctness checks are not speed
+benchmarks, especially with concurrent training on dfm.
