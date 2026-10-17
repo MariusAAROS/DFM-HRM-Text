@@ -11,7 +11,40 @@ confidence: high
 
 Runtime guidance is in the [request-shared scheduler runbook](request-shared-eval-scheduler.md).
 
+### 2026-10-17: Submodule publication blocker
+
+Pulling main through `36c5584` succeeded without conflicts using
+`git -c fetch.recurseSubmodules=false pull --no-rebase` after recursive fetch
+failed. That revision pins `dfm-evals` to `d7605ea5efb4f30f2e442a2c639b3e59dbc41602`,
+which the configured schneiderkamplab remote rejects with `not our ref`.
+`git submodule update --init --recursive` also fails on that pin. The local
+submodule remains at `1789d64`; do not stage it as a rollback. Publish the
+missing commit from its originating repository, then repeat submodule update.
+Main and the installed evaluator are not yet fully synchronized.
+
 ### 2026-10-17: Repair of the 1.1M path failures
+
+Later verification supersedes the pending-restoration status below: repair
+finalization completed and generation 6 restored successfully. Training reached
+1,120,850 before filesystem access failed (`PermissionError` on
+`/work/dfm/HRM-Text`) at 05:55. The scheduler failed on the same path. A new
+machine session lacked the local `/tmp` database; its 05:54 shared backup passed
+SQLite integrity checking and was restored to the same local database path.
+Only the interrupted 1,150K training row was reset, with resume tag
+`ephemeral_step_1120500` (sidecar, DCP metadata and eight shards present).
+All its recovery dependencies were already done. The attempted fresh launch
+then failed before checkpoint loading because W&B credentials were absent in
+the new session. Reauthenticate before retrying; do not disable logging or
+rerun completed evaluations.
+
+After user reauthentication, the same row was retried. The original CLI still
+contained passed suspension boundaries (1.05M and 1.1M), causing a ready-only
+pause at 1,120,501. Requesting supervisor restoration without an offload receipt
+triggered its disk fallback, not an in-memory resume. The fallback checkpoint
+loaded successfully with consumed boundaries removed; progress beyond 1,120,501
+was verified. For future fresh launches, prune already-passed CLI suspension
+boundaries before launching; do not request an offload restore for a ready-only
+pause. Rich monitoring was recreated in `hrm-0:4` with a 30-second refresh.
 
 The missing-path issue below was repaired without changing shared held-out pins.
 `python -m scripts.localize_dfm14_eval` generates machine-local configuration
