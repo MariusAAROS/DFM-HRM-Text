@@ -865,3 +865,30 @@ ARM64/x64 CPU. Artifact versions identify the llama.cpp commit rather than the
 application version. Qualcomm GPU/NPU acceleration remains unqualified and is
 not represented by the Windows ARM64 CPU package. Initial build qualification
 is in progress; hosted GPU builds alone do not demonstrate GPU inference.
+
+### 2026-10-17: upstream refresh and Qualcomm release gate
+
+Publication of the standalone llama.cpp preview was paused following the user's
+upstream-refresh question; the empty release was returned to draft and build
+run 38992809042 was cancelled. No new llama.cpp archives were published.
+A read-only merge-tree check against upstream ea0c4c2c8 found 18 conflicted files.
+The pinned fork has eight unique commits; upstream has 687 since the common
+ancestor c9a5eeeb34ab8f794ea7510ca52d25da13728a5b. Conflicts include context,
+KV cache, sampling, server state, tokenizer, Vulkan and tests. No actual merge
+was applied. Refresh on an integration branch and rerun PrefixLM/MixedLM,
+tokenization, lifecycle/server persistence and ordinary causal regressions
+before choosing a new binary release pin.
+
+Qualcomm code is already present in the pinned fork. Adreno OpenCL packaging
+needs the SDK/loader and real-device qualification. Hexagon additionally needs
+its SDK/toolchain, architecture-specific HTP libraries and compatible device
+drivers/FastRPC runtime. Windows Hexagon requires signed HTP catalog files;
+the upstream developer recipe uses test-signing (potentially disabling Secure
+Boot), so a public plug-and-play NPU release needs a separate signing solution.
+Existing Windows ARM64 hosted CI only establishes CPU functionality. Test real
+Mimir Q4_K_M, Q8_0 and 16-bit models with PrefixLM/MixedLM, explicit masks,
+fallback and memory limits before declaring either backend supported.
+
+References: upstream docs/backend/OPENCL.md and
+docs/backend/snapdragon/{README,windows,linux}.md, inspected locally and on
+https://github.com/ggml-org/llama.cpp on 2026-10-17.
