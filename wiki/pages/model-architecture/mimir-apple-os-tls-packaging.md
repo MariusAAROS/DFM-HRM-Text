@@ -216,4 +216,8 @@ unchanged archive, skipping only directory creation and completed build commands
 Use a Python 3.11+ interpreter for future archive_apple.py invocations.
 Evidence: macos-signed-14.log, macos-audit-14.log, build-14-flutter-tests.log and
 macos-upload-14.log under logs/sdu-store. Upload succeeded at 06:44 CEST on 19 October; Apple shows build 14 Processing.
-Selection and resubmission remain pending processing.
+Processing completed; the OS-only encryption answer was saved and build 14 was
+selected. Resubmission succeeded at 06:49 CEST on 19 October: **Waiting for Review**
+under the same submission ID cdb16591-5865-4642-bf93-972f7dfb7c70. Manual release
+and China mainland availability were retained. Proof:
+logs/sdu-store/submission-14/waiting-for-review.jpg. This is not approval or release.
