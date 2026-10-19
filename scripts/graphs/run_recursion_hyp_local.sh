@@ -21,7 +21,7 @@
 #   p  pointer chasing v2 (N=16, 4 queries per graph; v1 stayed at chance, see cfg_pointer2.yaml):
 #      pre H1L1 vs FIX H1L6, then FIX 2-layer H3L6 and TRM-matched H3L6.
 #
-# W&B: train HRM-RecursionHyp-Local, eval HRM-RecursionHyp-Local-eval, bench HRM-RecursionHyp-Local-smoke.
+# W&B: project HRM-Graph, group recursion-hyp (train + eval, by job_type); bench runs in group recursion-hyp-bench.
 #
 # Usage (from repo root):
 #   BENCH=1 BENCH_SECONDS=300 PHASES="b c" FIX=peri RUNS="graphqa_peri_H1_L6_s0 graphqa_trm-matched_H3_L6_s0" \
@@ -36,13 +36,14 @@ cd "$(dirname "$0")/../.."
 
 ROOT="${ROOT:-/work/dfm/marius-ortega/dfm-hrm-graphs/recursion_hyp}"  # fresh root: old-stack checkpoints would be "already trained"
 DATA_DIR="${DATA_DIR:-data/graphs/sampled/graphqa_e20}"
-EVAL_DIR="${EVAL_DIR:-data/graphqa/hrm-text/standard}"
+EVAL_DIR="${EVAL_DIR:-data/graphs/graphqa/hrm-text/standard}"
 POINTER_DATA_DIR="${POINTER_DATA_DIR:-data/graphs/sampled/pointer_e4}"
-POINTER_EVAL_DIR="${POINTER_EVAL_DIR:-data/pointer/hrm-text/standard}"
+POINTER_EVAL_DIR="${POINTER_EVAL_DIR:-data/graphs/pointer/hrm-text/standard}"
 POINTER2_DATA_DIR="${POINTER2_DATA_DIR:-data/graphs/sampled/pointer2_e3}"
-POINTER2_EVAL_DIR="${POINTER2_EVAL_DIR:-data/pointer2/hrm-text/standard}"
+POINTER2_EVAL_DIR="${POINTER2_EVAL_DIR:-data/graphs/pointer2/hrm-text/standard}"
 CONFIG=cfg_graphqa
-PROJECT="${PROJECT:-HRM-RecursionHyp-Local}"
+PROJECT="${PROJECT:-HRM-Graph}"
+GROUP="${GROUP:-recursion-hyp}"
 EVAL_TAG="${EVAL_TAG:-recursion-hyp}"
 PHASES="${PHASES:-b}"
 FIX="${FIX:-}"

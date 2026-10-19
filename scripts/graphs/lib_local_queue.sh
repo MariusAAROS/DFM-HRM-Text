@@ -9,7 +9,8 @@
 # exists is skipped; with DEADLINE set, a worker does not start a run whose estimate would end
 # after it. Every run is trained, then evaluated on val + test (final checkpoint, EMA).
 #
-# Required: ROOT DATA_DIR EVAL_DIR CONFIG PROJECT RUN_TABLE
+# Required: ROOT DATA_DIR EVAL_DIR CONFIG PROJECT GROUP RUN_TABLE
+# W&B: train, eval and bench runs share PROJECT; GROUP (bench: GROUP-bench) and job_type separate them.
 # Optional: PY EVAL_PROJECT SMOKE_PROJECT EVAL_SET EVAL_TAG GPUS BENCH BENCH_SECONDS DEADLINE
 #           POLL_SECONDS GPU_IDLE_MIB RUNS DEFAULT_BENCH_RUNS
 # Hooks (define before queue_main to override):
@@ -19,8 +20,8 @@
 
 PY="${PY:-$PWD/.venv/bin/python}"  # repo-local venv (scripts/graphs/setup_venv.sh)
 export PATH="$(dirname "$PY"):$PATH"  # torchrun / ninja from the same env
-EVAL_PROJECT="${EVAL_PROJECT:-${PROJECT}-eval}"
-SMOKE_PROJECT="${SMOKE_PROJECT:-${PROJECT}-smoke}"
+EVAL_PROJECT="${EVAL_PROJECT:-$PROJECT}"
+SMOKE_PROJECT="${SMOKE_PROJECT:-$PROJECT}"
 EVAL_SET="${EVAL_SET:-old}"  # eval report name: eval_<set>_<split>_ep<E>.json
 EVAL_TAG="${EVAL_TAG:-fullbp-local}"
 read -r -a GPUS <<< "${GPUS:-$(nvidia-smi --query-gpu=index --format=csv,noheader | tr "\n" " ")}"  # default: every visible GPU
@@ -63,7 +64,7 @@ wait_gpu_idle() {
   done
 }
 
-train_cmd() {  # $1 = run name, $2 = overrides, $3 = checkpoint path (or null), $4 = W&B project
+train_cmd() {  # $1 = run name, $2 = overrides, $3 = checkpoint path (or null), $4 = W&B project, $5 = W&B group
   # shellcheck disable=SC2086
   echo "$PY" -m torch.distributed.run --standalone --nnodes=1 --nproc_per_node=1 pretrain.py \
     --config-name "$RUN_CONFIG" \
@@ -71,6 +72,7 @@ train_cmd() {  # $1 = run name, $2 = overrides, $3 = checkpoint path (or null), 
     data.path="$RUN_DATA_DIR" \
     $2 \
     project_name="$4" \
+    wandb_group="$5" \
     run_name="$1" \
     checkpoint_path="$3"
 }
@@ -83,7 +85,7 @@ bench_run() {  # $1 = run name, $2 = overrides
   local mon=$!
   # shellcheck disable=SC2046
   CUDA_VISIBLE_DEVICES="$GPU" timeout --signal=INT --kill-after=60 "$BENCH_SECONDS" \
-    $(train_cmd "$1" "$2" null "$SMOKE_PROJECT") > "$log" 2>&1 || true
+    $(train_cmd "$1" "$2" null "$SMOKE_PROJECT" "$GROUP-bench") > "$log" 2>&1 || true
   kill "$mon" 2>/dev/null || true
   # tqdm writes "\r"-separated updates; the last one carries the smoothed rate and the total.
   local last rate total peak
@@ -119,6 +121,7 @@ eval_one() {  # $1 = run name, $2 = eval set name, $3.. = extra eval_graphqa.py 
       --data "$RUN_EVAL_DIR/$split.jsonl" \
       --use_ema \
       --max_generation 32 \
+      --no_wandb \
       "$@" \
       --out "$out" > "$ROOT/logs/eval_${name}_${set}_${split}.log" 2>&1 \
       || log "[eval] FAILED: $name $set $split (see logs)"
@@ -131,7 +134,7 @@ eval_run() {  # $1 = run name
   if declare -F extra_evals > /dev/null; then
     extra_evals "$1"
   fi
-  "$PY" scripts/graphs/log_graphqa_evals_to_wandb.py --root "$ROOT" --project "$EVAL_PROJECT" --tag "$EVAL_TAG" --run "$1" \
+  "$PY" scripts/graphs/log_graphqa_evals_to_wandb.py --root "$ROOT" --project "$EVAL_PROJECT" --group "$GROUP" --tag "$EVAL_TAG" --run "$1" \
     > "$ROOT/logs/wandb_eval_$1.log" 2>&1 \
     || log "[eval] wandb logging FAILED: $1 (see $ROOT/logs/wandb_eval_$1.log)"
 }
@@ -144,7 +147,7 @@ train_run() {  # $1 = run name, $2 = overrides
     wait_gpu_idle
     log "[train] $1  ($2)"
     # shellcheck disable=SC2046
-    if ! CUDA_VISIBLE_DEVICES="$GPU" $(train_cmd "$1" "$2" "$ckpt" "$PROJECT") > "$ROOT/logs/train_$1.log" 2>&1; then
+    if ! CUDA_VISIBLE_DEVICES="$GPU" $(train_cmd "$1" "$2" "$ckpt" "$PROJECT" "$GROUP") > "$ROOT/logs/train_$1.log" 2>&1; then
       log "[train] FAILED: $1 (see $ROOT/logs/train_$1.log)"
       return 1
     fi
@@ -183,7 +186,7 @@ queue_main() {
   mkdir -p "$CLAIMS"
 
   echo "Config: $CONFIG  data: $DATA_DIR  root: $ROOT  gpus: ${GPUS[*]}  wandb: $WANDB_MODE"
-  echo "W&B projects: train=$PROJECT eval=$EVAL_PROJECT bench=$SMOKE_PROJECT  deadline: ${DEADLINE:-none}"
+  echo "W&B: train=$PROJECT eval=$EVAL_PROJECT bench=$SMOKE_PROJECT  group=$GROUP  deadline: ${DEADLINE:-none}"
 
   for g in "${GPUS[@]}"; do
     worker "$g" &

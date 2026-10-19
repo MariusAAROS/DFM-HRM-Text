@@ -1,11 +1,11 @@
 # From-scratch MetaQA (KGQA) for the L/H ablation. data.path=data/graphs/sampled/metaqa_e20; multi-answer variants: data/graphs/sampled/metaqa-{gold-1,gold-5,gold-10,retrieved-1}_e20.
-# Same model/optimizer recipe as cfg_graphqa.yaml; only data, epochs and W&B project differ.
+# Same model/optimizer recipe as cfg_graphqa.yaml; only data, epochs and W&B group differ.
 # NOTE: scripts/graphs/prepare_dataset.sh must be run with <epochs> equal to `epochs` here.
 defaults:
   - cfg_graphqa
   - _self_
 
-project_name: HRM-MetaQA-Ablation
+wandb_group: metaqa
 
 epochs: 20
 checkpoint_interval: 2

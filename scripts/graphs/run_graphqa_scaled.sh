@@ -90,7 +90,7 @@ bench_run() {  # $1 = run name, $2 = overrides
   local mon=$!
   # shellcheck disable=SC2046
   WANDB_MODE=offline timeout --signal=INT --kill-after=60 "$BENCH_SECONDS" \
-    $(train_cmd "$1" "$2" null) project_name=HRM-GraphQA-Scaled-bench > "$log" 2>&1 || true
+    $(train_cmd "$1" "$2" null) wandb_group=graphqa-scaled-bench > "$log" 2>&1 || true
   kill "$mon" 2>/dev/null || true
   # tqdm writes "\r"-separated updates; the last one carries the smoothed rate and the total.
   local last rate total
@@ -131,13 +131,14 @@ eval_run() {  # $1 = run name
           --data "$EVAL_ROOT/eval-$set/standard/$split.jsonl" \
           --use_ema \
           --max_generation 32 \
+          --no_wandb \
           --out "$out" > "$ROOT/logs/eval_$1_${set}_${split}_ep${e}.log" 2>&1 \
           || echo "[eval] FAILED: $1 epoch $e $set/$split (see logs)"
       done
     done
   done
   # One wandb run per eval report (same keys as eval_graphqa.py --wandb_project); skips already-logged reports.
-  "$PY" scripts/graphs/log_graphqa_evals_to_wandb.py --root "$ROOT" --run "$1" > "$ROOT/logs/wandb_eval_$1.log" 2>&1 \
+  "$PY" scripts/graphs/log_graphqa_evals_to_wandb.py --root "$ROOT" --project HRM-Graph --group graphqa-scaled --run "$1" > "$ROOT/logs/wandb_eval_$1.log" 2>&1 \
     || echo "[eval] wandb logging FAILED: $1 (see $ROOT/logs/wandb_eval_$1.log)"
 }
 

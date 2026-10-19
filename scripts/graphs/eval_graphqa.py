@@ -4,6 +4,10 @@ Ported from HRM-Text-for-Graphs/scripts/eval_graphqa.py. Answers are short and d
 a node id, a small list), so greedy decoding + normalized exact match is the metric. Set-based
 precision / recall / F1 / hits@1 over '|'-joined answers are reported alongside accuracy for the
 multi-answer variants (e.g. metaqa-gold-5); on single-answer data they reduce to exact match.
+`tf_exact_match` is the teacher-forced exact match of Graph-Representation-Learning-for-LLM
+(val/exact_match there: argmax == label at every answer token, ignoring what follows). Under greedy
+decoding it equals "the generation starts with the gold answer". Rows with a `task` field also get
+per-task accuracy.
 
 Generation uses simple_inference_engine.inference_generate (batched greedy decoding with a KV cache;
 prompt prefill is bidirectional like the PrefixLM training prefix). Prompts are tokenized exactly as in
@@ -16,7 +20,8 @@ whether a model trained at L = 6 actually uses its extra L steps.
 Usage:
     .venv/bin/python scripts/graphs/eval_graphqa.py \
         --ckpt_path <ckpt_dir> --data data/graphs/graphqa/hrm-text/standard/test.jsonl \
-        --use_ema --out <ckpt_dir>/eval_test.json --wandb_project graphqa-eval
+        --use_ema --out <ckpt_dir>/eval_test.json
+    (logs to W&B project HRM-Graph, group = the checkpoint's wandb_group; --no_wandb to skip)
 """
 import argparse
 import json
@@ -24,6 +29,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from collections import defaultdict
 from typing import Optional
 
 import torch
@@ -59,14 +65,12 @@ def set_scores(pred: str, label: str) -> tuple[float, float, float, float]:
     return precision, recall, f1, float(bool(got) and got[0] in gold)
 
 
-def read_config_cycles(ckpt_path: str) -> tuple[Optional[int], Optional[int]]:
+def read_config(ckpt_path: str) -> dict:
     cfg_file = os.path.join(ckpt_path, "all_config.yaml")
     if not os.path.exists(cfg_file):
-        return None, None
+        return {}
     with open(cfg_file, "r") as f:
-        cfg = yaml.safe_load(f)
-    arch = cfg.get("arch", {})
-    return arch.get("H_cycles"), arch.get("L_cycles")
+        return yaml.safe_load(f)
 
 
 def main():
@@ -83,8 +87,10 @@ def main():
     ap.add_argument("--out", default=None, help="Where to write the JSON report.")
     ap.add_argument("--H_cycles", type=int, default=None, help="Override the trained H_cycles at inference.")
     ap.add_argument("--L_cycles", type=int, default=None, help="Override the trained L_cycles at inference.")
-    # wandb (opt-in: only active when --wandb_project is set)
-    ap.add_argument("--wandb_project", default=None, help="W&B project name. Enables wandb logging when set.")
+    # wandb (on by default; the queues pass --no_wandb and log reports via log_graphqa_evals_to_wandb.py)
+    ap.add_argument("--wandb_project", default="HRM-Graph", help="W&B project name.")
+    ap.add_argument("--wandb_group", default=None, help="W&B group (default: the checkpoint's wandb_group).")
+    ap.add_argument("--no_wandb", action="store_true", help="Do not log to W&B.")
     ap.add_argument("--wandb_entity", default=None, help="W&B entity (team or user). Uses default if omitted.")
     ap.add_argument("--wandb_name", default=None, help="W&B run name. Auto-generated from ckpt if omitted.")
     ap.add_argument("--wandb_tags", nargs="*", default=None, help="Optional W&B tags (e.g. --wandb_tags ablation ema).")
@@ -99,17 +105,20 @@ def main():
     overrides = {k: v for k, v in (("H_cycles", args.H_cycles), ("L_cycles", args.L_cycles)) if v is not None}
     ckpt = inference_load_checkpoint(args.ckpt_path, args.ckpt_epoch, args.use_ema, ckpt_tag=args.ckpt_tag,
                                      arch_overrides=overrides)
-    trained_H, trained_L = read_config_cycles(args.ckpt_path)
+    train_cfg = read_config(args.ckpt_path)
+    trained_H, trained_L = train_cfg.get("arch", {}).get("H_cycles"), train_cfg.get("arch", {}).get("L_cycles")
     H_cycles, L_cycles = overrides.get("H_cycles", trained_H), overrides.get("L_cycles", trained_L)
 
-    # ---- wandb init (opt-in) -----------------------------------------------
-    use_wandb = args.wandb_project is not None
+    # ---- wandb init ---------------------------------------------------------
+    use_wandb = not args.no_wandb
     if use_wandb:
         run_name = args.wandb_name or os.path.basename(os.path.normpath(args.ckpt_path))
         wandb.init(
             project=args.wandb_project,
             entity=args.wandb_entity,
             name=run_name,
+            group=args.wandb_group or train_cfg.get("wandb_group"),
+            job_type="eval",
             tags=args.wandb_tags,
             config={
                 "ckpt_path": args.ckpt_path,
@@ -136,22 +145,31 @@ def main():
             print(f"  [{len(preds)}/{len(rows)}] generated", flush=True)
 
     results = []
-    correct = 0
+    correct = tf_correct = 0
+    per_task: dict[str, list[int]] = defaultdict(lambda: [0, 0])
     sum_p = sum_r = sum_f1 = sum_hits1 = 0.0
     for idx, row in enumerate(rows):
         pred, gold = preds[idx], row["response"]
         is_correct = normalize(pred) == normalize(gold)
+        tf_match = pred.startswith(gold)
         correct += int(is_correct)
+        tf_correct += int(tf_match)
+        if "task" in row:
+            per_task[row["task"]][0] += int(is_correct)
+            per_task[row["task"]][1] += 1
         p, r, f1, hits1 = set_scores(pred, gold)
         sum_p += p
         sum_r += r
         sum_f1 += f1
         sum_hits1 += hits1
-        results.append({"id": idx, "gold": gold, "pred": pred, "correct": is_correct,
+        results.append({"id": idx, "task": row.get("task"), "gold": gold, "pred": pred, "correct": is_correct,
+                        "tf_exact_match": tf_match,
                         "precision": p, "recall": r, "f1": f1, "hits_at_1": hits1})
 
     n = len(rows)
     accuracy = correct / n if n else 0.0
+    tf_exact_match = tf_correct / n if n else 0.0
+    task_accuracy = {t: c / k for t, (c, k) in sorted(per_task.items())}
     precision = sum_p / n if n else 0.0
     recall = sum_r / n if n else 0.0
     f1 = sum_f1 / n if n else 0.0
@@ -168,6 +186,8 @@ def main():
         "n": n,
         "correct": correct,
         "accuracy": accuracy,
+        "tf_exact_match": tf_exact_match,
+        "task_accuracy": task_accuracy,
         "precision": precision,
         "recall": recall,
         "f1": f1,
@@ -177,19 +197,20 @@ def main():
     }
 
     print(f"H_cycles={H_cycles} L_cycles={L_cycles}  "
-          f"accuracy = {accuracy:.4f} ({correct}/{n})  "
+          f"accuracy = {accuracy:.4f} ({correct}/{n})  tf_exact_match = {tf_exact_match:.4f}  "
           f"P = {precision:.4f}  R = {recall:.4f}  F1 = {f1:.4f}  hits@1 = {hits_at_1:.4f}")
 
     # ---- wandb log ----------------------------------------------------------
     if use_wandb:
-        wandb.log({"eval/accuracy": accuracy, "eval/correct": correct, "eval/n": n,
-                   "eval/precision": precision, "eval/recall": recall, "eval/f1": f1,
-                   "eval/hits_at_1": hits_at_1})
+        wandb.log({"eval/accuracy": accuracy, "eval/tf_exact_match": tf_exact_match, "eval/correct": correct,
+                   "eval/n": n, "eval/precision": precision, "eval/recall": recall, "eval/f1": f1,
+                   "eval/hits_at_1": hits_at_1, **{f"eval/task/{t}": a for t, a in task_accuracy.items()}})
 
         # Per-sample table for drill-down in the wandb UI
-        table = wandb.Table(columns=["id", "gold", "pred", "correct", "precision", "recall", "f1", "hits_at_1"])
+        table = wandb.Table(columns=["id", "task", "gold", "pred", "correct", "tf_exact_match",
+                                     "precision", "recall", "f1", "hits_at_1"])
         for r in results:
-            table.add_data(r["id"], r["gold"], r["pred"], r["correct"],
+            table.add_data(r["id"], r["task"], r["gold"], r["pred"], r["correct"], r["tf_exact_match"],
                            r["precision"], r["recall"], r["f1"], r["hits_at_1"])
         wandb.log({"eval/samples": table})
         wandb.finish()

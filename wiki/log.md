@@ -1,5 +1,7 @@
 # Knowledge Bundle Update Log
 
+- 2026-10-19: [Graph reasoning experiments](pages/graph-reasoning-experiments.md): all runs now log to W&B `HRM-Graph` (groups per experiment). Added HF→native import and weights-only fine-tuning. HRM-Text-1B on GraphQA reaches best val teacher-forced EM 0.829 and test 0.795, against GRL's 0.849–0.865 best val, one seed each. Fixed queue eval paths.
+
 - 2026-10-19: Added [graph reasoning experiments](pages/graph-reasoning-experiments.md): data_io tokenization verified identical to the old HRM-Text-for-Graphs prep, `accelerator_type=sm120` on PyTorch FA2 varlen kernels (FA4 CuTe SM120 varlen fails to compile), BPTT/inject_x/Peri-LN knobs, single-GPU torchrun smoke runs.
 
 - 2026-10-19: Prepared macOS build 14 with a persistent Show DFM Mimir window command and neutral local HTTP API wording. All 75 Flutter tests and signed archive audits pass; [review repair details](pages/model-architecture/mimir-apple-os-tls-packaging.md#macos-review-repair--19-october-2026-build-14).

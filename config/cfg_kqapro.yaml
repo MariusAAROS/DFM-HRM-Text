@@ -1,11 +1,11 @@
 # From-scratch KQA Pro for the L/H ablation. data.path=data/graphs/sampled/kqapro_e6. Prompts are ~4.5x longer than GraphQA (8.91M train tokens, 6824 samples, longest 3009 tokens < 4096); 6 epochs ~= 13.0k steps.
-# Same model/optimizer recipe as cfg_graphqa.yaml; only data, epochs and W&B project differ.
+# Same model/optimizer recipe as cfg_graphqa.yaml; only data, epochs and W&B group differ.
 # NOTE: scripts/graphs/prepare_dataset.sh must be run with <epochs> equal to `epochs` here.
 defaults:
   - cfg_graphqa
   - _self_
 
-project_name: HRM-KQAPro-Ablation
+wandb_group: kqapro
 
 epochs: 6
 checkpoint_interval: 2

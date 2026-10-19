@@ -13,6 +13,9 @@ FA3/FA4 attention). It also hosts the **graph-reasoning recursion-depth study** 
 variants), KQA Pro, pointer chasing, GSM8k, MATH, MMLU. These models are trained **from scratch** at size B.
 Only data, configs, experiment drivers and the model knobs they need were ported. The old `pretrain.py`,
 FlexAttention and RecursionProbe instrumentation were not.
+It also fine-tunes **pretrained Hugging Face HRM-Text checkpoints** (e.g. `sapientinc/HRM-Text-1B`), to compare with
+`../Graph-Representation-Learning-for-LLM` (GRL), which fine-tuned the same model through transformers/Lightning.
+Results from the old stack are not used for comparisons any more.
 
 - Read [`AGENTS.md`](AGENTS.md) and the OKF wiki ([`wiki/index.md`](wiki/index.md), rules in
   [`wiki/schema.md`](wiki/schema.md)) for DFM-wide knowledge, and record durable findings there.
@@ -60,8 +63,13 @@ FlexAttention and RecursionProbe instrumentation were not.
 
 - `config/cfg_graphqa.yaml` is the recipe: size B, 4096 tokens/step, lr 3e-4, warmup 200, cosine to 0.1, EMA
   0.999, seed 0. It inherits `cfg_pretrain`, so any training key can be overridden. Children change only
-  data/epochs/project: `cfg_graphqa_scaled`, `cfg_metaqa`, `cfg_kqapro`, `cfg_gsm8k`, `cfg_math`, `cfg_mmlu`,
+  data/epochs/W&B group: `cfg_graphqa_scaled`, `cfg_metaqa`, `cfg_kqapro`, `cfg_gsm8k`, `cfg_math`, `cfg_mmlu`,
   `cfg_pointer`, `cfg_pointer2`. Pass `data.path=data/graphs/sampled/...`.
+- `config/cfg_graphqa_hrm1b.yaml`: full fine-tune of HRM-Text-1B (size XL = 2 x 16 layers, hidden 1536) on GraphQA
+  with GRL's prompt and hyperparameters (lr 5e-5 constant, betas 0.9/0.999, wd 0.01, no EMA, bp_max_steps 5).
+- **W&B: every run goes to project `HRM-Graph`**. `wandb_group` names the experiment (graphqa, graphqa-fullbp,
+  recursion-hyp, graphqa-hrm1b, ...), `job_type` is train or eval, bench runs use group `<experiment>-bench`.
+  `wandb_tags` is also available. The old per-experiment projects (HRM-GraphQA-*, *-eval) are history.
 - `lr_auto: false` keeps the old single-LR recipe. The new stack's default (`true`) divides the H/L LRs by
   their backward call counts.
 - Old → new keys: `resume_from` → `resume_checkpoint_path`; `compile_scope=step|block` →
@@ -73,6 +81,25 @@ FlexAttention and RecursionProbe instrumentation were not.
   - `arch.inject_x=True`;
   - `arch.norm_type=peri` (Peri-LN).
 
+## Pretrained Hugging Face checkpoints
+
+- `conversion/convert_from_hf.py` is the inverse of `convert_to_hf.py` (vLLM-packed layout = the hub layout). It composes
+  a training config, refuses to write if that config's architecture differs from the HF `config.json`, and writes a
+  native checkpoint dir: `unsharded_step_0.pt`, `all_config.yaml`, `train_metadata.yaml`.
+- Fine-tune: `init_weights_path=<dir>/unsharded_step_0.pt` loads the weights only (fresh optimizer, step 0). It is
+  ignored when resuming. Zero-shot eval: `eval_graphqa.py --ckpt_path <dir> --ckpt_tag step_0`.
+- Parity: `tests/test_convert_from_hf.py` (tiny random model, fp32) matches transformers' `HrmTextForCausalLM` to
+  1e-5. The real 1B in bf16 agrees on 202/203 teacher-forced answer argmaxes (max logit diff 0.25 on a scale of 19).
+- The HRM-Text-1B tokenizer equals `data_io/trained_tokenizers/bpe`, so the graph datasets need no re-tokenization.
+  GRL's prompt adds `#### Question\n` before the question: `data/graphs/graphqa/hrm-text-grl` (with `task` labels),
+  sampled as `graphqa_grl_e20` (train) and `graphqa_grl_val_e32` (val).
+- GRL's `val/exact_match` is **teacher-forced** (argmax == label on every answer token; nothing after the answer is
+  checked). `eval_graphqa.py` reports it as `tf_exact_match`, next to greedy-generation `accuracy`.
+- 1B fine-tune on one RTX PRO 6000: ~1.3 it/s at 8192 tokens/step, 76 GB peak. Eval: `--max_tokens 1536
+  --batch_size 32` (GraphQA prompts reach ~1,330 tokens; the KV cache of 8 H/L applications x 16 layers is large).
+- Driver: `bash scripts/graphs/run_graphqa_hrm1b.sh` (import, train, val per epoch, test at the best val epoch,
+  zero-shot baseline, W&B group `graphqa-hrm1b`).
+
 ## Commands
 
 ```bash
@@ -82,10 +109,14 @@ torchrun --standalone --nproc_per_node=1 pretrain.py --config-name cfg_graphqa \
   data.path=data/graphs/sampled/graphqa_e20 arch.H_cycles=2 arch.L_cycles=3 \
   run_name=graphqa_H2_L3 checkpoint_path=/work/dfm/marius-ortega/dfm-hrm-graphs/ckpts/graphqa_H2_L3
 
-# Evaluate (greedy exact match + set P/R/F1/hits@1; reads H/L from all_config.yaml, --L_cycles overrides)
+# Evaluate (greedy + teacher-forced exact match, set P/R/F1/hits@1; reads H/L from all_config.yaml, --L_cycles
+# overrides). Logs to W&B HRM-Graph in the checkpoint's wandb_group; --no_wandb to skip.
 .venv/bin/python scripts/graphs/eval_graphqa.py --ckpt_path <ckpt_dir> \
   --data data/graphs/graphqa/hrm-text/standard/test.jsonl --use_ema \
-  --out <ckpt_dir>/eval_test.json --wandb_project graphqa-eval
+  --out <ckpt_dir>/eval_test.json
+
+# Import + fine-tune + evaluate HRM-Text-1B on GraphQA
+bash scripts/graphs/run_graphqa_hrm1b.sh
 
 # Experiment queues (one worker per visible GPU; BENCH=1 for speed/memory)
 bash scripts/graphs/run_graphqa_fullbp_local.sh
@@ -94,7 +125,7 @@ bash scripts/graphs/run_graphqa_scaled.sh
 
 # Tests for the ported pieces (the SM120 parity tests need the GPU)
 .venv/bin/python -m pytest -q tests/test_flash_attention_prefixlm_sm120.py tests/test_hrm_bp_budget.py \
-  tests/test_transformer_peri_norm.py tests/test_flash_attention_prefixlm_bounds.py
+  tests/test_transformer_peri_norm.py tests/test_flash_attention_prefixlm_bounds.py tests/test_convert_from_hf.py
 ```
 
 ## Gotchas
@@ -113,5 +144,9 @@ bash scripts/graphs/run_graphqa_scaled.sh
   gradient signal. The full-BP arm de-confounds it. The logged `bp_steps` is the number of block applications
   with gradient (H_bp + L_bp): H×(L+1) under full BP, e.g. 21 for H3L6.
 - The `data_io` tokenizer does not follow symlinks; `prepare_dataset.sh` hard-links or copies its input.
+- In-training validation (`data.validation_path`): every validation call restarts the val iterator, which moves to the
+  next `epoch_N/` dir. Sample the val set with at least one epoch per validation call, and set `validation_batches`
+  above its batch count, or alternate calls score a leftover fragment.
 - Pre-existing test failures, unrelated to graphs: `tests/test_gradient_skip.py` (2 failures; the config stub
-  lacks `experiment_update_probe_interval`) and three handoff tests that need `psutil`.
+  lacks `experiment_update_probe_interval`), tests that need `psutil` (handoff, `test_training_safety.py`), and
+  `tests/test_hf_export_rope.py` (imports `eval_scheduler.runtime`, absent from this checkout).

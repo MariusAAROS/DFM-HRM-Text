@@ -9,7 +9,7 @@ Reports are re-used from disk (no GPU); a `<report>.wandb` marker next to each J
 prevents logging it twice. Called by scripts/graphs/run_graphqa_scaled.sh after each eval.
 
 Usage:
-    python scripts/graphs/log_graphqa_evals_to_wandb.py [--root ...] [--project HRM-GraphQA-Scaled-eval] [--run <run name>]
+    python scripts/graphs/log_graphqa_evals_to_wandb.py [--root ...] [--project HRM-Graph] [--group graphqa-scaled] [--run <run name>]
 """
 import argparse
 import glob
@@ -32,9 +32,12 @@ PATTERN = re.compile(r"eval_(\w+?)_(val|test)_ep(\d+)\.json$")
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", default="/work/dfm/marius-ortega/dfm-hrm-graphs/graphqa_scaled")
-    ap.add_argument("--project", default="HRM-GraphQA-Scaled-eval")
+    ap.add_argument("--project", default="HRM-Graph")
+    ap.add_argument("--group", default="graphqa-scaled", help="W&B group (the experiment); job_type is eval.")
     ap.add_argument("--run", default=None, help="Only log reports of this run (default: all runs).")
     ap.add_argument("--tag", default="scaled", help="Experiment tag added to every logged run.")
+    ap.add_argument("--splits", nargs="+", default=["val", "test"], choices=["val", "test"],
+                    help="Only log reports of these splits (e.g. --splits test).")
     args = ap.parse_args()
 
     run_glob = args.run or "*"
@@ -43,13 +46,17 @@ def main():
         if not m or os.path.exists(path + ".wandb"):
             continue
         set_name, split, epoch = m.group(1), m.group(2), int(m.group(3))
+        if split not in args.splits:
+            continue
         run = os.path.basename(os.path.dirname(path))
         with open(path) as f:
             report = json.load(f)
         # "<set>_Lov<k>" reports (L_cycles overridden at inference) share <set>'s questions. Sets without
         # GraphQA task labels (e.g. pointer chasing) are logged without the per-task breakdown.
         raw = RAW.get(set_name.split("_Lov")[0])
-        if raw is not None:
+        if all(sample.get("task") for sample in report["samples"]):  # eval JSONL carried the task label
+            tasks = [sample["task"] for sample in report["samples"]]
+        elif raw is not None:
             with open(os.path.join(raw.format(root=args.root), f"{split}.json")) as f:
                 tasks = [r["task"] for r in json.load(f)]
         else:
@@ -66,6 +73,8 @@ def main():
         backprop = "full" if "_fullbp" in run else "truncated"
         wandb.init(
             project=args.project,
+            group=args.group,
+            job_type="eval",
             name=f"{run}_{set_name}_{split}_ep{epoch}",
             tags=[f"H{H}", f"L{L}", model, set_name, split, f"ep{epoch}", backprop, args.tag],
             config={
@@ -88,6 +97,7 @@ def main():
             "eval/accuracy": report["accuracy"], "eval/correct": report["correct"], "eval/n": report["n"],
             "eval/precision": report["precision"], "eval/recall": report["recall"], "eval/f1": report["f1"],
             "eval/hits_at_1": report["hits_at_1"],
+            **({"eval/tf_exact_match": report["tf_exact_match"]} if "tf_exact_match" in report else {}),
             "eval/acc_no_maxflow": sum(c for c, _ in no_mf) / max(1, sum(n for _, n in no_mf)),
             **{f"eval/task/{t}": c / n for t, (c, n) in sorted(per_task.items())},
         })

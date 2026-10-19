@@ -1,11 +1,11 @@
 # Pointer chasing v1 (scripts/graphs/make_pointer_chasing.py, N=32, one query): controlled-depth positive control of the recursion study. data.path=data/graphs/sampled/pointer_e4. 12k samples x ~425 tokens = ~1,244 steps/epoch.
-# Same model/optimizer recipe as cfg_graphqa.yaml; only data, epochs and W&B project differ.
+# Same model/optimizer recipe as cfg_graphqa.yaml; only data, epochs and W&B group differ.
 # NOTE: scripts/graphs/prepare_dataset.sh must be run with <epochs> equal to `epochs` here.
 defaults:
   - cfg_graphqa
   - _self_
 
-project_name: HRM-RecursionHyp-Local
+wandb_group: pointer
 
 epochs: 4
 checkpoint_interval: 2

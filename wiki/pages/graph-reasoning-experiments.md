@@ -1,8 +1,8 @@
 ---
 type: Runbook
 title: Graph Reasoning Experiments (ported from HRM-Text-for-Graphs)
-description: Datasets, tokenization parity, SM120 attention backend, configs and verified smoke runs for the GraphQA/KGQA recursion-depth study.
-tags: [graphs, graphqa, kgqa, recursion, sm120, tokenization, attention]
+description: Datasets, tokenization parity, SM120 attention backend, configs, verified smoke runs and the HRM-Text-1B fine-tune for the GraphQA/KGQA recursion-depth study.
+tags: [graphs, graphqa, kgqa, recursion, sm120, tokenization, attention, fine-tuning, huggingface]
 status: stable
 last_updated: 2026-10-19
 confidence: high
@@ -85,10 +85,69 @@ Eval smoke (`scripts/graphs/eval_graphqa.py`, step 250, val): runs end to end, 1
 (early checkpoint mostly answers "Yes."). W&B: entity `m-ortega-p-le-l-onard-de-vinci` on
 `forge.coreweave.com`, projects `HRM-GraphQA-Smoke` and `HRM-GraphQA-Smoke-eval`.
 
+## W&B layout (from 2026-10-19)
+
+Every run logs to project `HRM-Graph` (entity `m-ortega-p-le-l-onard-de-vinci`). `wandb_group` is the experiment
+(graphqa, graphqa-fullbp, recursion-hyp, graphqa-hrm1b, ...), `job_type` is train or eval, bench runs use
+`<experiment>-bench`. Earlier projects (HRM-GraphQA-*, *-eval, *-smoke) hold the old-stack and smoke results and are
+not used for comparisons.
+
+## Fine-tuning pretrained HRM-Text-1B (verified 2026-10-19)
+
+`conversion/convert_from_hf.py` maps an HF HRM-Text checkpoint (hub layout = `convert_to_hf.py`'s vllm_packed) onto the
+native model; `init_weights_path` loads it for fine-tuning. HRM-Text-1B is size XL with half_layers (2 x 16 layers,
+hidden 1536, 12 heads, MLP 4096, lecun init so embedding scale sqrt(1536)), H2L3, `L_bp_cycles=[0,3]` = `bp_max_steps 5`.
+Confidence: high.
+
+- Parity: tiny random model, fp32 CPU, native cache path vs transformers 5.20.1 `HrmTextForCausalLM` with
+  `token_type_ids`: max logit diff 1e-6 (`tests/test_convert_from_hf.py`, 1e-5 tolerance). In float64 the gap stays
+  ~1e-7 because HF RMSNorm always computes in fp32. Real 1B in bf16 on 32 GraphQA val prompts: 202/203 answer argmaxes
+  agree, max logit diff 0.25 (logit scale 19).
+- The native `zL_init` buffer is allocated in `fwd_bwd_dtype` (bf16). The hub checkpoint stores it in bf16, so nothing is lost.
+- Recipe `config/cfg_graphqa_hrm1b.yaml` follows Graph-Representation-Learning-for-LLM (GRL) `configs/hrm_text.yaml`:
+  - same splits (row-identical to GRL `data/graphqa/baseline/standard`);
+  - same prompt (`#### Question\n` + question, condition `direct`);
+  - lr 5e-5 constant, betas 0.9/0.999, wd 0.01, no EMA.
+  - Differs from GRL in: AdamATan2 on fp32 master weights instead of AdamW on bf16 weights, 8192-token packed batches
+    (~28 samples instead of 32), 20 warmup steps, a supervised `<|box_end|>`, and 10 epochs without early stopping.
+- GRL's `val/exact_match` is teacher-forced: argmax == label at each answer token. `eval_graphqa.py` reports it as
+  `tf_exact_match` (greedy output starts with the gold answer). Once fine-tuned, it equalled greedy normalized exact
+  match at every epoch.
+- One RTX PRO 6000: 1.3 it/s, 76 GB peak, 1,100 steps in about 18 minutes. Evaluating 385 samples takes about 75 s at
+  `--max_tokens 1536 --batch_size 32`.
+
+Results, seed 0 (`scripts/graphs/run_graphqa_hrm1b.sh`; W&B group `graphqa-hrm1b`):
+
+| Checkpoint | val tf_EM | test tf_EM | test gen EM |
+| --- | ---: | ---: | ---: |
+| zero-shot (imported, step 0) | 0.000 | 0.000 | 0.384 |
+| best val epoch (7 of 10) | 0.829 | 0.795 | 0.795 |
+| GRL `hrm-text-id` (2 runs), best val epoch | 0.849 / 0.852 | not logged | |
+| GRL `graphqa-hrm-text-clip1-id`, best val epoch | 0.865 | not logged | |
+
+- Per-epoch val tf_EM: 0.769, 0.761, 0.816, 0.790, 0.787, 0.803, 0.829, 0.821, 0.797, 0.818.
+- Test per task at epoch 7 matches GRL's per-task profile:
+  - MaximumFlow 0.18, TriangleCounting 0.53, EdgeCount 0.62;
+  - CycleCheck, EdgeExistence, NodeCount and Reachability at 1.0.
+- This run is about 2-3 points below GRL's best val. One val sample is 0.26 points, and the binomial SE at 0.83 on
+  385 samples is ~1.9 points. One seed per side, so the gap is not established. Confidence: medium.
+- Zero-shot, the model answers in a different format ("Yes", "10"), so tf_EM is 0. Normalized generation EM reaches
+  0.38-0.39 only because `normalize` strips trailing periods.
+
+## Fixes made 2026-10-19
+
+- `run_graphqa_fullbp_local.sh` / `run_recursion_hyp_local.sh` defaulted their eval dirs to `data/graphqa/...` and
+  `data/pointer*/...`, which do not exist. They now point to `data/graphs/...`. Before this fix, every queue eval would
+  have failed.
+- In-training validation needs one sampled val epoch per validation call: each restart of the val iterator reads the
+  next `epoch_N/` dir. With a 1-epoch val set, the first fine-tune crashed at step 110 (`epoch_1/inst_start.npy`
+  missing). `validation_batches` must exceed the val set's batch count, otherwise alternate calls score only a remainder.
+
 ## Layout
 
 - Raw/JSONL data: `data/graphs/` (gitignored); sampled training sets: `data/graphs/sampled/<name>_e<epochs>`.
 - Configs: `config/cfg_graphqa.yaml` (inherits `cfg_pretrain`) and children; `config/data/graphs.yaml`.
-- Tooling: `scripts/graphs/` (setup, prepare, parity, eval, queues, summaries).
+- Tooling: `scripts/graphs/` (setup, prepare, parity, eval, queues, summaries, `run_graphqa_hrm1b.sh`).
+- HF imports: `/work/dfm/marius-ortega/dfm-hrm-graphs/hf/<model>`; fine-tune outputs: `/work/dfm/marius-ortega/dfm-hrm-graphs/graphqa_hrm1b`.
 - Queue outputs: `/work/dfm/marius-ortega/dfm-hrm-graphs/<experiment>` (old-stack outputs stay in
   `/work/dfm/marius-ortega/<experiment>` and are not mixed in).

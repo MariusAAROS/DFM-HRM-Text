@@ -2,7 +2,7 @@
 # HRM-Text-for-Graphs/config/cfg_graphqa.yaml. Every (H_cycles, L_cycles) config is trained from
 # scratch, so the comparison is not biased by a shared pretrained init. The other graph configs
 # (cfg_graphqa_scaled, cfg_metaqa, cfg_kqapro, cfg_gsm8k, cfg_math, cfg_mmlu, cfg_pointer*) inherit
-# this recipe and only change data, epochs and W&B project.
+# this recipe and only change data, epochs and W&B group.
 #
 # Per-run CLI overrides (single GPU, no torchrun):
 #   data.path=data/graphs/sampled/graphqa_e20
@@ -21,7 +21,9 @@ defaults:
   - override data: graphs
   - _self_
 
-project_name: HRM-GraphQA-Ablation
+# Every graph run logs to one W&B project; wandb_group separates experiments (job_type: train/eval).
+project_name: HRM-Graph
+wandb_group: graphqa
 run_name: null
 checkpoint_path: null
 

@@ -1,11 +1,11 @@
 # Scaled GraphQA (~1M deduplicated train samples, seed 1234, val/test excluded): does the shallow-config advantage of the L/H grid survive ~300x more data and ~65x more steps? data.path=data/graphs/sampled/graphqa_scaled_e4 (~280K steps at 4096 tokens/step).
-# Same model/optimizer recipe as cfg_graphqa.yaml; only data, epochs and W&B project differ.
+# Same model/optimizer recipe as cfg_graphqa.yaml; only data, epochs and W&B group differ.
 # NOTE: scripts/graphs/prepare_dataset.sh must be run with <epochs> equal to `epochs` here.
 defaults:
   - cfg_graphqa
   - _self_
 
-project_name: HRM-GraphQA-Scaled
+wandb_group: graphqa-scaled
 
 epochs: 4
 checkpoint_interval: 1

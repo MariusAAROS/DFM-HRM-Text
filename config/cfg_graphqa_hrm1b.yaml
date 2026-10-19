@@ -1,0 +1,59 @@
+# Full fine-tune of the pretrained HRM-Text-1B (sapientinc/HRM-Text-1B) on GraphQA, the counterpart of
+# Graph-Representation-Learning-for-LLM's configs/hrm_text.yaml (dataset_config=baseline, standard split).
+# Same data (row-identical splits), prompt ("#### Question\n" + question, condition `direct`) and
+# lr / betas / weight decay / gradient budget. Differences from that run: AdamATan2 with fp32 master
+# weights instead of AdamW on bf16 weights, token-packed batches (~28 samples per step), the response
+# ends with <|box_end|> (supervised, so generation stops), and no early stopping (pick the checkpoint by val).
+#
+# 1. Import the weights (writes <dir>/unsharded_step_0.pt, also a zero-shot eval checkpoint):
+#      .venv/bin/python -m conversion.convert_from_hf --hf_model sapientinc/HRM-Text-1B \
+#        --out_dir /work/dfm/marius-ortega/dfm-hrm-graphs/hf/HRM-Text-1B \
+#        --config-name cfg_graphqa_hrm1b data.path=data/graphs/sampled/graphqa_grl_e20
+# 2. Train (torchrun, single GPU):
+#      torchrun --standalone --nproc_per_node=1 pretrain.py --config-name cfg_graphqa_hrm1b \
+#        run_name=graphqa_hrm1b checkpoint_path=/work/dfm/marius-ortega/dfm-hrm-graphs/ckpts/graphqa_hrm1b
+defaults:
+  - cfg_graphqa
+  - override arch/size@arch: XL  # HRM-Text-1B: 2 x 16 layers, hidden 1536, 12 heads, MLP 4096
+  - _self_
+
+wandb_group: graphqa-hrm1b
+
+data:
+  path: data/graphs/sampled/graphqa_grl_e20  # format_graphqa_to_hrm.py --instruction-prefix '#### Question\n' + prepare_dataset.sh
+  # Every validation call restarts the val iterator, which moves to the next sampled epoch_N/ dir, so the val
+  # set needs >= one epoch per call (here 20 = 1,100 steps / 55): prepare_dataset.sh ... val.jsonl 32.
+  validation_path: data/graphs/sampled/graphqa_grl_val_e32
+validation_interval: 55  # ~2x per epoch (110 steps/epoch)
+# More than the val split's ~15 batches (116,515 tokens), so every call is one full pass (a smaller value
+# would leave a remainder that the next call scores on its own).
+validation_batches: 64
+
+init_weights_path: /work/dfm/marius-ortega/dfm-hrm-graphs/hf/HRM-Text-1B/unsharded_step_0.pt
+
+arch:
+  H_cycles: 2
+  L_cycles: 3
+  # HRM-Text-1B's L_bp_cycles=[0, 3] (gradient through both H calls and the last 3 L calls) = bp_max_steps 5.
+  bp_max_steps: 5
+  bp_warmup_ratio: 0.0
+
+# ~28 GraphQA samples per step (GRL: 32 sequences = batch 8 x accumulation 4).
+global_batch_size: 8192
+# GRL's val exact match peaked at epochs 3-8 and early stopping ended the runs by epoch 9; the data dir
+# holds 20 sampled epochs, of which the first 10 are used. One checkpoint (~14 GB) per epoch for the val curve.
+epochs: 10
+checkpoint_interval: 1
+
+# GRL: constant lr 5e-5, torch AdamW defaults (betas 0.9/0.999, weight decay 0.01), no warmup, no EMA.
+# A short warmup protects the pretrained weights from the first, unnormalised Adam steps.
+lr: 5.0e-5
+lr_min_ratio: 1.0
+lr_warmup_steps: 20
+weight_decay: 0.01
+beta1: 0.9
+beta2: 0.999
+ema: null
+# GRL's Lightning gradient_clip_val: 0 by default (hrm-text-id), 1.0 in scripts/run_hrm_clip1.sh (*-clip1 runs).
+# Same quantity here: global L2 norm of the mean-loss gradient (models/gradient_clipping.py).
+gradient_clip_norm: null

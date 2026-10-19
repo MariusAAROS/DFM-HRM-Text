@@ -134,6 +134,8 @@ class PretrainConfig(pydantic.BaseModel):
     # Names
     project_name: Optional[str] = None
     run_name: Optional[str] = None
+    wandb_group: Optional[str] = None
+    wandb_tags: list[str] = pydantic.Field(default_factory=list)
     wandb_run_id: Optional[str] = None
     wandb_resume: Optional[str] = None
     checkpoint_path: Optional[str] = None
@@ -145,6 +147,10 @@ class PretrainConfig(pydantic.BaseModel):
     resume_batch_in_epoch: Optional[int] = None
     upcast_optimizer_state_on_resume: bool = False
     reset_ema_on_resume: bool = False
+    # Weights-only initialization (fine-tuning): a native model state dict (.pt with a "model" entry, or
+    # .safetensors), e.g. written by conversion/convert_from_hf.py. Optimizer, step and data position start
+    # fresh. Ignored when resuming, since the resumed checkpoint already holds the weights.
+    init_weights_path: Optional[str] = None
 
     # Extras
     seed: int = 0
@@ -382,6 +388,17 @@ def optimizer_ema_dtype(config: PretrainConfig) -> Optional[torch.dtype]:
     return None
 
 
+def load_init_weights(model: nn.Module, path: str) -> None:
+    if path.endswith(".safetensors"):
+        from safetensors.torch import load_file
+        state_dict = load_file(path)
+    else:
+        state_dict = torch.load(path, map_location="cpu", weights_only=True, mmap=True)
+        state_dict = state_dict.get("model", state_dict)
+    # Strict: every persistent tensor must come from the file (rotary caches are non-persistent buffers).
+    model.load_state_dict(state_dict, strict=True)
+
+
 def create_model_and_carry(config: PretrainConfig, train_metadata: V1DatasetMeta, local_batch_size: int, device: torch.device):
     model_cfg = (
         config.arch.model_dump()
@@ -403,6 +420,10 @@ def create_model_and_carry(config: PretrainConfig, train_metadata: V1DatasetMeta
         carry = model.initial_carry(local_batch_size, dtype=fwd_bwd_dtype)  # pyright: ignore[reportCallIssue]
         # Attach loss head
         model = head_cls(model, model_cfg)
+
+    if config.init_weights_path is not None and config.resume_checkpoint_path is None:
+        # Before activation checkpointing / FSDP wrap, which rename and shard parameters.
+        load_init_weights(model, config.init_weights_path)
 
     checkpointed_blocks: set[nn.Module] = set()
     if config.activation_checkpointing != "none":
@@ -1501,6 +1522,9 @@ def launch(hydra_config: DictConfig):
         wandb.init(
             project=config.project_name,
             name=config.run_name,
+            group=config.wandb_group,
+            tags=config.wandb_tags or None,
+            job_type="train",
             id=config.wandb_run_id,
             resume=config.wandb_resume,
             config=config.model_dump() | {"train_metadata": train_metadata.model_dump()},

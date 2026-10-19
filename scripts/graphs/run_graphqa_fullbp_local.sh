@@ -19,10 +19,8 @@
 # compiled (compile_train_batch=true); the run-time estimates below were measured on the old
 # FlexAttention stack, so re-bench with BENCH=1 before relying on DEADLINE.
 #
-# W&B: everything goes to dedicated projects so it never mixes with the Jean Zay grid
-# (HRM-GraphQA-Ablation / graphqa-eval) or the scaled runs:
-#   train  HRM-GraphQA-FullBP-Local    eval  HRM-GraphQA-FullBP-Local-eval
-#   bench  HRM-GraphQA-FullBP-Local-smoke
+# W&B: project HRM-Graph, group graphqa-fullbp (train and eval runs, told apart by job_type);
+# bench runs go to group graphqa-fullbp-bench.
 #
 # Two workers (one per GPU) claim runs from RUN_TABLE in order (longest first, stretch
 # runs last). A run whose final checkpoint exists is skipped. With DEADLINE set, a worker
@@ -41,9 +39,10 @@ cd "$(dirname "$0")/../.."
 
 ROOT="${ROOT:-/work/dfm/marius-ortega/dfm-hrm-graphs/graphqa_fullbp}"  # fresh root: old-stack checkpoints would be "already trained"
 DATA_DIR="${DATA_DIR:-data/graphs/sampled/graphqa_e20}"  # scripts/graphs/prepare_dataset.sh
-EVAL_DIR="${EVAL_DIR:-data/graphqa/hrm-text/standard}"  # byte-identical to the "old" split of the grid figure
+EVAL_DIR="${EVAL_DIR:-data/graphs/graphqa/hrm-text/standard}"  # byte-identical to the "old" split of the grid figure
 CONFIG=cfg_graphqa
-PROJECT="${PROJECT:-HRM-GraphQA-FullBP-Local}"
+PROJECT="${PROJECT:-HRM-Graph}"
+GROUP="${GROUP:-graphqa-fullbp}"
 
 # ---- Runs: name | estimated minutes (train + eval, on one RTX PRO 6000) | hydra overrides ----
 # Longest first to minimise the makespan; seed-1 stretch runs last (dropped first by DEADLINE).

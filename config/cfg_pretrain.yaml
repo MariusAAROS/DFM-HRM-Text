@@ -35,8 +35,11 @@ resume_step: null
 resume_batch_in_epoch: null
 upcast_optimizer_state_on_resume: false
 reset_ema_on_resume: false
+init_weights_path: null  # Weights-only init for fine-tuning (conversion/convert_from_hf.py); ignored when resuming
 project_name: null
 run_name: null
+wandb_group: null
+wandb_tags: []
 checkpoint_path: null
 seed: 0
 log_interval: 5
