@@ -3,7 +3,7 @@ from typing import Literal
 import torch
 
 
-AcceleratorType = Literal["sm90", "sm100", "rocm", "mps", "cpu", "none"]
+AcceleratorType = Literal["sm90", "sm100", "sm120", "rocm", "mps", "cpu", "none"]
 
 _accelerator_type: AcceleratorType = "sm100"
 
@@ -34,11 +34,13 @@ def _expected_cuda_major(accelerator_type: AcceleratorType) -> int:
         return 9
     if accelerator_type == "sm100":
         return 10
+    if accelerator_type == "sm120":
+        return 12
     raise ValueError(f"Unsupported CUDA accelerator_type: {accelerator_type}")
 
 
 def is_accelerator_available(accelerator_type: AcceleratorType, local_rank: int = 0) -> bool:
-    if accelerator_type in ("sm90", "sm100"):
+    if accelerator_type in ("sm90", "sm100", "sm120"):
         if not torch.cuda.is_available() or local_rank >= torch.cuda.device_count():
             return False
         major, _minor = torch.cuda.get_device_capability(local_rank)
@@ -56,7 +58,7 @@ def validate_accelerator_available(accelerator_type: AcceleratorType, local_rank
     if is_accelerator_available(accelerator_type, local_rank=local_rank):
         return
 
-    if accelerator_type in ("sm90", "sm100"):
+    if accelerator_type in ("sm90", "sm100", "sm120"):
         expected_major = _expected_cuda_major(accelerator_type)
         cuda_state = "available" if torch.cuda.is_available() else "unavailable"
         device_count = torch.cuda.device_count() if torch.cuda.is_available() else 0
@@ -96,7 +98,7 @@ def torch_device_for_accelerator(
     if validate:
         validate_accelerator_available(accelerator_type, local_rank=local_rank)
 
-    if accelerator_type in ("sm90", "sm100", "rocm"):
+    if accelerator_type in ("sm90", "sm100", "sm120", "rocm"):
         return torch.device("cuda", local_rank)
     if accelerator_type == "mps":
         return torch.device("mps")

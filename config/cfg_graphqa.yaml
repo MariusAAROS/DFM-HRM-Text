@@ -1,0 +1,61 @@
+# From-scratch training on GraphQA (size B) for the L/H recursion ablation, ported from
+# HRM-Text-for-Graphs/config/cfg_graphqa.yaml. Every (H_cycles, L_cycles) config is trained from
+# scratch, so the comparison is not biased by a shared pretrained init. The other graph configs
+# (cfg_graphqa_scaled, cfg_metaqa, cfg_kqapro, cfg_gsm8k, cfg_math, cfg_mmlu, cfg_pointer*) inherit
+# this recipe and only change data, epochs and W&B project.
+#
+# Per-run CLI overrides (single GPU, no torchrun):
+#   data.path=data/graphs/sampled/graphqa_e20
+#   arch.H_cycles=<H> arch.L_cycles=<L>
+#   run_name=graphqa_H<H>_L<L> checkpoint_path=<ckpt_dir>
+#   arch.full_backprop=True                         # full-BPTT arm (old: + compile_scope=block)
+#
+# Old -> new keys: resume_from -> resume_checkpoint_path; compile_scope=step|block -> compile_train_batch
+# (whole train step compiled, or eager); arch.grad_checkpointing -> activation_checkpointing;
+# instrumentation.* (RecursionProbe) was not ported (see stability_diagnostics_interval instead).
+# Inherits every training key from cfg_pretrain.yaml (so any of them can be overridden on the CLI);
+# only the values below differ.
+defaults:
+  - cfg_pretrain
+  - override arch/size@arch: B
+  - override data: graphs
+  - _self_
+
+project_name: HRM-GraphQA-Ablation
+run_name: null
+checkpoint_path: null
+
+# RTX PRO 6000 Blackwell (SM120): PrefixLM attention on PyTorch's built-in FA2 varlen kernels.
+# Use accelerator_type=sm100 on B200 (FA4) or sm90 on H100 (FA3).
+accelerator_type: sm120
+
+# GraphQA is a small, narrow task -> more epochs, modest token batch.
+# NOTE: scripts/graphs/prepare_dataset.sh must be run with <epochs> equal to `epochs` here.
+# global_batch_size = packed tokens per optimizer step (4096 packs ~20 short GraphQA samples).
+global_batch_size: 4096
+epochs: 20
+checkpoint_interval: 5
+
+# From-scratch LR schedule: linear warmup, cosine to 0.1 x lr.
+lr: 3.0e-4
+lr_min_ratio: 0.1
+lr_warmup_steps: 200
+# One LR for every module, as in the old runs. The new stack's default (lr_auto=true) divides the
+# H/L learning rates by their per-step backward call counts, which would change the recipe.
+lr_auto: false
+
+weight_decay: 0.1
+beta1: 0.9
+beta2: 0.95
+
+# EMA tuned for short-ish runs; eval uses EMA weights (--use_ema).
+ema: 0.999
+
+# Fixed across every config so runs differ ONLY in (H_cycles, L_cycles).
+seed: 0
+
+# Backprop-through-time policy (config/arch/net/hrm.yaml): bp_warmup_ratio=0.2, bp_min_steps=2,
+# bp_max_steps=5, kept FIXED across the main grid: HRM's truncated regime with bounded memory, needed
+# for deep configs like (8,12). The truncated budget shrinks as H_cycles grows
+# (H_bp = min(H, bp-1), L_bp = bp - H_bp), so depth and gradient signal are confounded; the
+# de-confounding arm is arch.full_backprop=True on a shallower subset that fits in memory.

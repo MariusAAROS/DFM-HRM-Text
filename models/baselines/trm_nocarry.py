@@ -4,7 +4,7 @@ import torch
 from torch import nn
 from torch import Tensor
 
-from models.common import trunc_normal_init_
+from models.common import trunc_normal_init_, resolve_bp_steps
 from models.transformer import Cache, TransformerConfig
 from models.baselines.hrm_nocarry_bp_warmup import HierarchicalReasoningModelRecurrentBlock
 
@@ -15,8 +15,16 @@ class TinyRecursiveModelConfig(TransformerConfig):
     H_cycles: int
     L_cycles: int
 
+    # -1 means "all cycles". NOTE: L_bp_steps counts the last N L-applications across ALL H cycles.
     H_bp_steps: int
     L_bp_steps: int
+
+    # Overrides both fields above. Unlike HRM this cannot be validated as a conflict: the net yaml
+    # always pins H/L_bp_steps, so a user-set value is indistinguishable from the default.
+    full_backprop: bool = False
+
+    # Re-inject the token embedding into every L step (z_L <- net(z_L, z_H + x)), as in the TRM paper.
+    inject_x: bool = False
 
 
 class TinyRecursiveModel(nn.Module):
@@ -33,8 +41,9 @@ class TinyRecursiveModel(nn.Module):
         # Config
         self.H_cycles = config.H_cycles
         self.L_cycles = config.L_cycles
-        self.H_bp_steps = config.H_bp_steps
-        self.L_bp_steps = config.L_bp_steps
+        self.inject_x = config.inject_x
+        self.H_bp_steps, self.L_bp_steps = resolve_bp_steps(
+            config.H_cycles, config.L_cycles, config.H_bp_steps, config.L_bp_steps, config.full_backprop)
 
         self.hidden_size = config.hidden_size
         self.head_hint = self.L_level.core.head_hint  # Hint for LMHead init (inherit from H)
@@ -51,7 +60,7 @@ class TinyRecursiveModel(nn.Module):
         for i in range(self.H_cycles):
             for k in range(i * self.L_cycles, (i + 1) * self.L_cycles):
                 with torch.set_grad_enabled(torch.is_grad_enabled() and (k >= self.H_cycles * self.L_cycles - self.L_bp_steps)):
-                    z_L = self.L_level(z_L, z_H, **seq_info, cache=cache["L"][k] if cache is not None else None)
+                    z_L = self.L_level(z_L, z_H + x if self.inject_x else z_H, **seq_info, cache=cache["L"][k] if cache is not None else None)
             
             with torch.set_grad_enabled(torch.is_grad_enabled() and (i >= self.H_cycles - self.H_bp_steps)):
                 z_H = self.L_level(z_H, z_L, **seq_info, cache=cache["H"][i] if cache is not None else None)

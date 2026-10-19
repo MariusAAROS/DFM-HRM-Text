@@ -1,5 +1,7 @@
 # Operational Knowledge and Plans
 
+* [Graph Reasoning Experiments](graph-reasoning-experiments.md) - GraphQA/KGQA recursion study ported from HRM-Text-for-Graphs: tokenization parity, SM120 attention, configs, smoke runs.
+
 * [XL Andersen Evaluation Backfill](andersen-xl-evaluation-backfill.md) - Main-line checkpoint inventory and missing validation-split prerequisites.
 * [Cooperative CUDA Suspension](cooperative-cuda-suspension.md) - Isolated prototype, atomic-file handshake, recovery controller and parity evidence.
 

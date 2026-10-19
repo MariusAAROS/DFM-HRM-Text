@@ -50,8 +50,17 @@ def configured_module_rates(config, bp_steps=None):
     arch = config.arch.model_dump() if hasattr(config.arch, 'model_dump') else config.arch
     if arch['name'] != 'baselines.hrm_nocarry_bp_warmup@HierarchicalReasoningModel':
         raise ValueError('lr_auto only supports hrm_nocarry_bp_warmup backward semantics')
-    h, l = backward_call_counts(arch['H_cycles'], arch['L_cycles'],
-                               arch.get('bp_min_steps', 2) if bp_steps is None else bp_steps)
+    if arch.get('full_backprop') or arch.get('H_bp_steps') is not None:
+        # Fixed budget: the bp_steps schedule does not apply.
+        from models.common import resolve_bp_steps
+        h, l = resolve_bp_steps(arch['H_cycles'], arch['L_cycles'],
+                                arch.get('H_bp_steps', -1), arch.get('L_bp_steps', -1),
+                                bool(arch.get('full_backprop')))
+        if h < 1 or l < 1:
+            raise ValueError('Auto LR requires at least one backward call per level')
+    else:
+        h, l = backward_call_counts(arch['H_cycles'], arch['L_cycles'],
+                                   arch.get('bp_min_steps', 2) if bp_steps is None else bp_steps)
     automatic = dict(embeddings=config.lr, head=config.lr, h=config.lr / h, l=config.lr / l)
     return {name: automatic[name] if value is None else value for name, value in rates.items()}
 

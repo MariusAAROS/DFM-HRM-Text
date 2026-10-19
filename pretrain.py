@@ -252,7 +252,7 @@ def create_dataloader(
         "dataset": dataset,
         "batch_size": None,
         "num_workers": num_workers,
-        "pin_memory": config.accelerator_type in ("sm90", "sm100", "rocm"),
+        "pin_memory": config.accelerator_type in ("sm90", "sm100", "sm120", "rocm"),
     }
     if num_workers > 0:
         dataloader_kwargs |= {

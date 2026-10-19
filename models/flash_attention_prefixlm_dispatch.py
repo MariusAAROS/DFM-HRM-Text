@@ -136,6 +136,30 @@ def flash_attn_varlen_prefixlm(
                 grad_mask_impl=fa4_grad_mask_impl,
                 output_combine_impl=fa4_output_combine_impl,
             )
+        case "sm120":
+            # FA4 CuTe cannot compile SM120 varlen kernels; use PyTorch's built-in FA2 varlen kernels.
+            from models.flash_attention_prefixlm_torch_varlen import flash_attn_varlen_prefixlm as torch_varlen_prefixlm
+
+            return torch_varlen_prefixlm(
+                q,
+                k,
+                v,
+                is_causal,
+                prefix_lens,
+                causal_lens,
+                cu_seqlens,
+                total_seqlen,
+                numseqs,
+                max_seqlen_prefix,
+                max_seqlen_causal,
+                max_seqlen_all,
+                prefix_cu_seqlens=prefix_cu_seqlens,
+                prefix_idx=prefix_idx,
+                causal_idx=causal_idx,
+                active_key_idx=active_key_idx,
+                active_cu_seqlens_q=active_cu_seqlens_q,
+                active_cu_seqlens_k=active_cu_seqlens_k,
+            )
         case "rocm":
             from models.flash_attention_prefixlm_rocm import flash_attn_varlen_prefixlm as rocm_prefixlm
 

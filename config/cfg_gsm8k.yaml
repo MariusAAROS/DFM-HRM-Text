@@ -1,0 +1,11 @@
+# From-scratch GSM8k (direct answers) for the L/H ablation. data.path=data/graphs/sampled/gsm8k_e15 (scripts/graphs/prepare_benchmark_data.py --benchmark gsm8k).
+# Same model/optimizer recipe as cfg_graphqa.yaml; only data, epochs and W&B project differ.
+# NOTE: scripts/graphs/prepare_dataset.sh must be run with <epochs> equal to `epochs` here.
+defaults:
+  - cfg_graphqa
+  - _self_
+
+project_name: HRM-GSM8k-Ablation
+
+epochs: 15
+checkpoint_interval: 10

@@ -203,11 +203,15 @@ def inference_load_checkpoint(
     ckpt_use_ema: bool,
     ckpt_tag: Optional[str] = None,
     tokenizer_path_override: Optional[str | os.PathLike[str]] = None,
+    arch_overrides: Optional[dict[str, Any]] = None,
 ):
     # Load Checkpoint
     # Load config
     with open(os.path.join(ckpt_path, "all_config.yaml"), "r") as f:
         model_cfg = PretrainConfig(**yaml.safe_load(f))
+    if arch_overrides:
+        # Inference-time architecture changes that no weight depends on, e.g. H_cycles / L_cycles.
+        model_cfg.arch = type(model_cfg.arch)(**(model_cfg.arch.model_dump() | arch_overrides))
     with open(os.path.join(ckpt_path, "train_metadata.yaml"), "r") as f:
         train_metadata = V1DatasetMeta(**yaml.safe_load(f))
 

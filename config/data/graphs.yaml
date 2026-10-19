@@ -1,0 +1,2 @@
+path: ???  # data/graphs/sampled/<name>_e<epochs> (scripts/graphs/prepare_dataset.sh); set data.path=... on the CLI
+target_only: true  # Supervise responses only, as in HRM-Text-for-Graphs

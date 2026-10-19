@@ -1,0 +1,6 @@
+# Stratified-sampling config for single-dataset graph experiments (data_io/sample_tokenized.py).
+# Each tokenized tree holds one train file, so one catch-all rule: keep every row once per epoch.
+# Overlong rows are dropped (never truncated); prepare_dataset.sh fails if any row is dropped,
+# matching the old prepare_sft_data.py, which refused samples longer than the context.
+- prefix: ""
+  long_context: drop

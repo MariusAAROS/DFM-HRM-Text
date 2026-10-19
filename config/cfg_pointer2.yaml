@@ -1,0 +1,11 @@
+# Pointer chasing v2 (make_pointer_chasing.py --N 16 --ks 1,2,3,4,6,8 --queries 4 --train 30000 --eval 600): ~4% of tokens supervised. data.path=data/graphs/sampled/pointer2_e3. 30k samples x ~262 tokens = ~1,919 steps/epoch.
+# Same model/optimizer recipe as cfg_graphqa.yaml; only data, epochs and W&B project differ.
+# NOTE: scripts/graphs/prepare_dataset.sh must be run with <epochs> equal to `epochs` here.
+defaults:
+  - cfg_graphqa
+  - _self_
+
+project_name: HRM-RecursionHyp-Local
+
+epochs: 3
+checkpoint_interval: 3

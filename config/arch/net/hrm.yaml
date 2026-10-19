@@ -11,6 +11,16 @@ H_override: {}
 bp_warmup_ratio: 0.2
 bp_max_steps: 5
 
+# Backprop-through-time budget. `full_backprop: True` backprops through every cycle and
+# disables the bp warmup above. Alternatively set H_bp_steps/L_bp_steps explicitly (-1 = all);
+# L_bp_steps counts the last N L-applications across ALL H cycles, so its max is H_cycles*L_cycles.
+full_backprop: False
+# H_bp_steps: null
+# L_bp_steps: null
+
+# Re-inject the token embedding into every L step (original HRM / TRM).
+inject_x: False
+
 # Goldfish loss is disabled by default. Set goldfish_strategy=hash to drop a
 # deterministic content-dependent subset of supervised labels.
 goldfish_strategy: null

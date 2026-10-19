@@ -1,10 +1,11 @@
 from typing import TYPE_CHECKING, Tuple, Dict, Any, Optional
 
+import pydantic
 import torch
 from torch import nn
 from torch import Tensor
 
-from models.common import trunc_normal_init_
+from models.common import trunc_normal_init_, resolve_bp_steps
 from models.transformer import Transformer, Cache, TransformerConfig
 
 if TYPE_CHECKING:
@@ -22,9 +23,32 @@ class HierarchicalReasoningModelConfig(TransformerConfig):
     bp_max_steps: int = 5
     fwd_bwd_dtype: str = "bfloat16"
 
+    # Backprop through every cycle. Sugar for H_bp_steps=-1, L_bp_steps=-1.
+    full_backprop: bool = False
+    # Explicit per-axis budget, overriding the bp warmup schedule. -1 means "all cycles".
+    # NOTE: L_bp_steps counts the last N L-applications across ALL H cycles, so its max is H*L.
+    H_bp_steps: Optional[int] = None
+    L_bp_steps: Optional[int] = None
+
+    # Re-inject the token embedding into every L step (z_L <- L(z_L, z_H + x)), as in the original
+    # HRM / TRM. Off by default: here z_H starts at x but x is not re-injected afterwards.
+    inject_x: bool = False
+
     # Change some Transformer config of H-level
     # TODO: Try asymmetric H and L module, such as different size, hidden dims, architecture, attention type, etc.
     H_override: Dict[str, Any] = {}
+
+    @pydantic.model_validator(mode="after")
+    def _validate_bp_policy(self):
+        if (self.H_bp_steps is None) != (self.L_bp_steps is None):
+            raise ValueError("H_bp_steps and L_bp_steps must be set together: the warmup schedule splits a single "
+                             "joint budget across both axes, so pinning one while leaving the other on the schedule "
+                             "is ill-defined.")
+        if self.full_backprop:
+            if self.H_bp_steps is not None:
+                raise ValueError("full_backprop=True is ambiguous with an explicit H_bp_steps/L_bp_steps; set one or the other.")
+            self.bp_warmup_ratio = 0.0  # The schedule is irrelevant under full backprop.
+        return self
 
 
 class HierarchicalReasoningModelRecurrentBlock(nn.Module):
@@ -81,6 +105,12 @@ class HierarchicalReasoningModelRecurrentBlock(nn.Module):
 
 
 class HierarchicalReasoningModel(nn.Module):
+    # Legacy BPTT policy; overridden per instance in __init__.
+    full_backprop: bool = False
+    cfg_H_bp_steps: Optional[int] = None
+    cfg_L_bp_steps: Optional[int] = None
+    inject_x: bool = False
+
     def __init__(self, config_dict: dict) -> None:
         super().__init__()
         config = HierarchicalReasoningModelConfig(**config_dict)
@@ -99,6 +129,10 @@ class HierarchicalReasoningModel(nn.Module):
         self.bp_warmup_ratio = config.bp_warmup_ratio
         self.bp_min_steps = config.bp_min_steps
         self.bp_max_steps = config.bp_max_steps
+        self.full_backprop = config.full_backprop
+        self.cfg_H_bp_steps = config.H_bp_steps
+        self.cfg_L_bp_steps = config.L_bp_steps
+        self.inject_x = config.inject_x
 
         self.hidden_size = config.hidden_size
         self.head_hint = self.H_level.core.head_hint  # Hint for LMHead init (inherit from H)
@@ -108,6 +142,17 @@ class HierarchicalReasoningModel(nn.Module):
         # Create cache function
         self.create_cache = lambda **kwargs: dict(H=[self.H_level.create_cache(**kwargs) for _i in range(self.H_cycles)],
                                                   L=[self.L_level.create_cache(**kwargs) for _i in range(self.H_cycles * self.L_cycles)])
+
+    def _resolve_bp_steps(self, bp_steps: int) -> Tuple[int, int]:
+        if self.full_backprop:
+            return resolve_bp_steps(self.H_cycles, self.L_cycles, -1, -1, full_backprop=True)
+        if self.cfg_H_bp_steps is not None and self.cfg_L_bp_steps is not None:  # The config validator enforces they move together.
+            return resolve_bp_steps(self.H_cycles, self.L_cycles, self.cfg_H_bp_steps, self.cfg_L_bp_steps)
+
+        # Warmup schedule: prioritize H, and at least 1 is allocated to L.
+        H_bp_steps = min(self.H_cycles, bp_steps - 1)
+        L_bp_steps = bp_steps - H_bp_steps
+        return H_bp_steps, L_bp_steps
 
     def forward(
         self,
@@ -120,17 +165,14 @@ class HierarchicalReasoningModel(nn.Module):
     ) -> Tuple[None, torch.Tensor]:
         z_H, z_L = x, self.zL_init
 
-        # Calculate H and L bp_steps
-        # Priortize H, and at least 1 is allocated to L.
-        H_bp_steps = min(self.H_cycles, bp_steps - 1)
-        L_bp_steps = bp_steps - H_bp_steps
+        H_bp_steps, L_bp_steps = self._resolve_bp_steps(bp_steps)
 
         for i in range(self.H_cycles):
             for k in range(i * self.L_cycles, (i + 1) * self.L_cycles):
                 with torch.set_grad_enabled(torch.is_grad_enabled() and (k >= self.H_cycles * self.L_cycles - L_bp_steps)):
                     z_L = self.L_level(
                         z_L,
-                        z_H,
+                        z_H + x if self.inject_x else z_H,
                         **seq_info,
                         cache=cache["L"][k] if cache is not None else None,
                         stability_diagnostics=stability_diagnostics,
@@ -150,6 +192,10 @@ class HierarchicalReasoningModel(nn.Module):
         return None, z_H
 
     def compute_train_extra_args(self, train_state: Any) -> dict[str, Any]:
+        if getattr(self, "full_backprop", False) or getattr(self, "cfg_H_bp_steps", None) is not None:
+            # Fixed budget: forward() ignores bp_steps. Report the block applications that receive gradient
+            # (H_bp + L_bp, e.g. H*(L+1) under full backprop), the same quantity the warmup schedule reports.
+            return dict(bp_steps=sum(self._resolve_bp_steps(self.bp_max_steps)))
         if self.bp_warmup_ratio == 0:
             return dict(bp_steps=self.bp_max_steps)
         return dict(bp_steps=self.bp_min_steps + int(min(1, train_state.step / (train_state.total_steps * self.bp_warmup_ratio)) * (self.bp_max_steps - self.bp_min_steps)))

@@ -19,6 +19,26 @@ def packing_sequence_sum(x: Tensor, cu_seqlens: Tensor):
     return c[cu_seqlens[1:]] - c[cu_seqlens[:-1]]
 
 
+def resolve_bp_steps(H_cycles: int, L_cycles: int, H_bp_steps: int, L_bp_steps: int, full_backprop: bool = False) -> tuple[int, int]:
+    """Resolve the backprop-through-time budget of a two-level recurrence.
+
+    The two axes are counted by separate loop indices, so they have separate maxima:
+    `H_bp_steps` counts the last N of the `H` H-block applications, while `L_bp_steps` counts
+    the last N L-block applications across ALL H cycles (the L loop index is global over
+    `0..H*L-1`). Hence "backprop through everything" is `(H_cycles, H_cycles * L_cycles)`.
+    Note this is NOT the total block-application count `H*(L+1)` used for depth accounting.
+
+    A negative value means "all cycles on that axis". Shared by HRM and TRM so they cannot drift apart.
+    """
+    H_max, L_max = H_cycles, H_cycles * L_cycles
+    if full_backprop:
+        return H_max, L_max
+
+    H_bp = H_max if H_bp_steps < 0 else min(H_bp_steps, H_max)
+    L_bp = L_max if L_bp_steps < 0 else min(L_bp_steps, L_max)
+    return H_bp, L_bp
+
+
 @dataclass
 class WrappedTensor:
     value: Tensor
@@ -42,7 +62,7 @@ def prepare_prefixlm_batch(
         prefixlm_prepared_from_tensors,
     )
 
-    if get_accelerator_type() not in ("sm100", "rocm"):
+    if get_accelerator_type() not in ("sm100", "sm120", "rocm"):
         return batch
     if all(name in batch for name in PREFIXLM_PREPARED_KEYS):
         return batch
