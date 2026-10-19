@@ -1,6 +1,7 @@
 # Desktop local API and headless server
 
-Linux, Windows and macOS support an opt-in **local HTTP API for text chat completions**. The API is off by default. It runs locally and uses the loaded Mimir
+Linux, Windows and macOS support an opt-in **local HTTP API for text chat
+completions**. The API is off by default. It runs locally and uses the loaded Mimir
 model's own GGUF chat template. No cloud account is needed.
 
 ## While using the app
@@ -10,7 +11,8 @@ Open **Model and settings**, choose a port (default `8080`), and enable
 Enable it again after restarting the app. API requests share the UI's loaded
 model and execute serially with UI work; they do not create or alter saved chats.
 Model/settings changes and new UI generation are disabled while API work is
-pending. Turning the API off cancels its requests. Quitting the app stops it. On macOS, closing the window keeps the app running;
+pending. Turning the API off cancels its requests. Quitting the app stops it.
+On macOS, closing the window keeps the app running;
 use Window → Show DFM Mimir (⌘0) or click its Dock icon to reopen it.
 
 The API uses exact PrefixLM requests without automatic compaction or cross-request

@@ -215,4 +215,5 @@ check requires Python 3.11+. Audits were rerun with Python 3.12 against the
 unchanged archive, skipping only directory creation and completed build commands.
 Use a Python 3.11+ interpreter for future archive_apple.py invocations.
 Evidence: macos-signed-14.log, macos-audit-14.log, build-14-flutter-tests.log and
-macos-upload-14.log under logs/sdu-store. Upload/submission outcome pending.
+macos-upload-14.log under logs/sdu-store. Upload succeeded at 06:44 CEST on 19 October; Apple shows build 14 Processing.
+Selection and resubmission remain pending processing.
