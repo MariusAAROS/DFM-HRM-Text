@@ -1,5 +1,7 @@
 # Knowledge Bundle Update Log
 
+- 2026-10-20: [Graph reasoning experiments](pages/graph-reasoning-experiments.md#generation-length-bug-and-grl-test-comparison-2026-10-20): GRL's H2L3 test score (0.834, W&B `HRM-Pretrained-Recursion` `b-graphqa-H2L3`) located. Most of our ~3-point gap was `eval_graphqa.py --max_generation 32` cutting off 9 long node-list answers; raised to 96 everywhere. Greedy-generation EM is the comparison metric. Queued the DFM-Mimir-v1.5 GraphQA fine-tune (Gemma chat-format data, parity-checked import, 87 GB bench).
+
 - 2026-10-19: [Graph reasoning experiments](pages/graph-reasoning-experiments.md): all runs now log to W&B `HRM-Graph` (groups per experiment). Added HF→native import and weights-only fine-tuning. HRM-Text-1B on GraphQA reaches best val teacher-forced EM 0.829 and test 0.795, against GRL's 0.849–0.865 best val, one seed each. Fixed queue eval paths.
 
 - 2026-10-19: Added [graph reasoning experiments](pages/graph-reasoning-experiments.md): data_io tokenization verified identical to the old HRM-Text-for-Graphs prep, `accelerator_type=sm120` on PyTorch FA2 varlen kernels (FA4 CuTe SM120 varlen fails to compile), BPTT/inject_x/Peri-LN knobs, single-GPU torchrun smoke runs.

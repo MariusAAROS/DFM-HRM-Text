@@ -11,6 +11,7 @@
 #   bash scripts/graphs/run_graphqa_hrm1b.sh
 #   RUN=graphqa_hrm1b_s1 OVERRIDES="seed=1" bash scripts/graphs/run_graphqa_hrm1b.sh
 #   LOG_SPLITS=test ...   # log only the test report (best val epoch) to W&B; val JSONs stay on disk
+#   Other HRM-Text checkpoints: HF_MODEL, HF_DIR, CONFIG, GROUP, TAG, ROOT (see run_graphqa_mimir_seeds.sh).
 # =====================================================================
 set -euo pipefail
 
@@ -23,8 +24,9 @@ EVAL_DIR="${EVAL_DIR:-data/graphs/graphqa/hrm-text-grl/standard}"
 RUN="${RUN:-graphqa_hrm1b_s0}"
 OVERRIDES="${OVERRIDES:-}"
 LOG_SPLITS="${LOG_SPLITS:-val test}"  # eval reports sent to W&B
-CONFIG=cfg_graphqa_hrm1b
-GROUP=graphqa-hrm1b
+CONFIG="${CONFIG:-cfg_graphqa_hrm1b}"
+GROUP="${GROUP:-graphqa-hrm1b}"
+TAG="${TAG:-hrm1b-finetune}"
 PY="${PY:-$PWD/.venv/bin/python}"
 export PATH="$(dirname "$PY"):$PATH"
 export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
@@ -57,7 +59,7 @@ eval_one() {  # $1 = ckpt dir, $2 = ckpt arg (--ckpt_epoch N | --ckpt_tag step_0
   log "[eval] $(basename "$1") $2 $3"
   # shellcheck disable=SC2086
   "$PY" scripts/graphs/eval_graphqa.py --ckpt_path "$1" $2 --data "$EVAL_DIR/$3.jsonl" \
-    --max_tokens 1536 --batch_size 32 --max_generation 32 --no_wandb --out "$4" \
+    --max_tokens 1536 --batch_size 32 --max_generation 96 --no_wandb --out "$4" \
     > "$ROOT/logs/eval_$(basename "$4" .json).log" 2>&1
 }
 
@@ -84,7 +86,7 @@ eval_one "$CKPT" "--ckpt_epoch $BEST" test "$CKPT/eval_grl_test_ep$BEST.json"
 # 5. One W&B eval run per report.
 for run in zeroshot "$RUN"; do
   "$PY" scripts/graphs/log_graphqa_evals_to_wandb.py --root "$ROOT" --project HRM-Graph --group "$GROUP" \
-    --tag hrm1b-finetune --run "$run" --splits $LOG_SPLITS >> "$ROOT/logs/wandb_eval.log" 2>&1 \
+    --tag "$TAG" --run "$run" --splits $LOG_SPLITS >> "$ROOT/logs/wandb_eval.log" 2>&1 \
     || log "[eval] wandb logging FAILED: $run (see $ROOT/logs/wandb_eval.log)"
 done
 "$PY" - "$ROOT" "$RUN" "$EPOCHS" "$BEST" <<'PY'

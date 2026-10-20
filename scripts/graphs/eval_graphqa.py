@@ -80,7 +80,7 @@ def main():
     ap.add_argument("--ckpt_epoch", type=int, default=None, help="Epoch to load (default: latest).")
     ap.add_argument("--ckpt_tag", default=None, help="Explicit checkpoint tag, e.g. step_250 (overrides --ckpt_epoch).")
     ap.add_argument("--use_ema", action="store_true", help="Use EMA weights (recommended).")
-    ap.add_argument("--max_generation", type=int, default=32, help="Max new tokens for the answer.")
+    ap.add_argument("--max_generation", type=int, default=96, help="Max new tokens for the answer (GraphQA gold answers reach 62 tokens).")
     ap.add_argument("--max_tokens", type=int, default=4096, help="KV-cache length: prompt + generation upper bound.")
     ap.add_argument("--batch_size", type=int, default=64, help="Concurrent generations.")
     ap.add_argument("--limit", type=int, default=None, help="Optional cap on number of eval samples.")

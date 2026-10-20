@@ -130,7 +130,7 @@ eval_run() {  # $1 = run name
           --ckpt_epoch "$e" \
           --data "$EVAL_ROOT/eval-$set/standard/$split.jsonl" \
           --use_ema \
-          --max_generation 32 \
+          --max_generation 96 \
           --no_wandb \
           --out "$out" > "$ROOT/logs/eval_$1_${set}_${split}_ep${e}.log" 2>&1 \
           || echo "[eval] FAILED: $1 epoch $e $set/$split (see logs)"

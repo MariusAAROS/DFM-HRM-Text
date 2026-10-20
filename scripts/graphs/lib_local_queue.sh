@@ -120,7 +120,7 @@ eval_one() {  # $1 = run name, $2 = eval set name, $3.. = extra eval_graphqa.py 
       --ckpt_epoch "$RUN_EPOCHS" \
       --data "$RUN_EVAL_DIR/$split.jsonl" \
       --use_ema \
-      --max_generation 32 \
+      --max_generation 96 \
       --no_wandb \
       "$@" \
       --out "$out" > "$ROOT/logs/eval_${name}_${set}_${split}.log" 2>&1 \

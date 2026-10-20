@@ -4,7 +4,7 @@ title: Graph Reasoning Experiments (ported from HRM-Text-for-Graphs)
 description: Datasets, tokenization parity, SM120 attention backend, configs, verified smoke runs and the HRM-Text-1B fine-tune for the GraphQA/KGQA recursion-depth study.
 tags: [graphs, graphqa, kgqa, recursion, sm120, tokenization, attention, fine-tuning, huggingface]
 status: stable
-last_updated: 2026-10-19
+last_updated: 2026-10-20
 confidence: high
 ---
 # Graph Reasoning Experiments
@@ -113,10 +113,23 @@ Confidence: high.
 - GRL's `val/exact_match` is teacher-forced: argmax == label at each answer token. `eval_graphqa.py` reports it as
   `tf_exact_match` (greedy output starts with the gold answer). Once fine-tuned, it equalled greedy normalized exact
   match at every epoch.
+  - The two are equivalent under greedy decoding (by induction over answer positions), up to bf16 KV-cache vs
+    full-forward argmax flips, **only if `--max_generation` covers the whole answer**. Teacher forcing has no length
+    limit; generation does.
+  - Decision (2026-10-20): compare models on greedy-generation EM (`eval/accuracy`). Teacher-forced EM does not measure
+    whether the model can generate the answer. GRL only reports teacher-forced EM, so GRL comparisons use that metric
+    as given.
 - One RTX PRO 6000: 1.3 it/s, 76 GB peak, 1,100 steps in about 18 minutes. Evaluating 385 samples takes about 75 s at
   `--max_tokens 1536 --batch_size 32`.
+  - Breakdown (2026-10-20, 64 samples at batch 8, sharing the GPU with another eval): imports 11 s, load 3.5 s,
+    prefill 137 ms per prompt, decode 111 ms per step.
+  - Prefill is mostly compute: 128 layer applications per token (8 H/L x 16), ~500k prompt tokens. Decode is
+    overhead-bound: eager, one GPU sync per step.
+  - Kept as is (normal). Possible speedups: one process for all epochs, CUDA-graph decode, batched prefill.
 
-Results, seed 0 (`scripts/graphs/run_graphqa_hrm1b.sh`; W&B group `graphqa-hrm1b`):
+Results, seed 0 (`scripts/graphs/run_graphqa_hrm1b.sh`; W&B group `graphqa-hrm1b`).
+**Superseded 2026-10-20:** these evals used `--max_generation 32`, which cut off 9 test and 10 val answers. See
+[Generation-length bug and GRL test comparison](#generation-length-bug-and-grl-test-comparison-2026-10-20).
 
 | Checkpoint | val tf_EM | test tf_EM | test gen EM |
 | --- | ---: | ---: | ---: |
@@ -135,8 +148,64 @@ Results, seed 0 (`scripts/graphs/run_graphqa_hrm1b.sh`; W&B group `graphqa-hrm1b
   - CycleCheck, EdgeExistence, NodeCount and Reachability at 1.0.
 - This run is about 2-3 points below GRL's best val. One val sample is 0.26 points, and the binomial SE at 0.83 on
   385 samples is ~1.9 points. One seed per side, so the gap is not established. Confidence: medium.
+  (Superseded 2026-10-20: most of the gap was the 32-token generation cap, see below.)
 - Zero-shot, the model answers in a different format ("Yes", "10"), so tf_EM is 0. Normalized generation EM reaches
   0.38-0.39 only because `normalize` strips trailing periods.
+
+### Generation-length bug and GRL test comparison (2026-10-20)
+
+Seeds 0-2, unclipped and `gradient_clip_norm=1.0` (`scripts/graphs/run_graphqa_hrm1b_seeds.sh`; seed s trains on
+`graphqa_grl_s<s>_e20`, so only the data order changes). Test at the best val epoch, 385 samples, as first evaluated
+with `--max_generation 32` (W&B group `graphqa-hrm1b`, 2026-10-19):
+
+| Arm | s0 | s1 | s2 | mean |
+| --- | ---: | ---: | ---: | ---: |
+| unclipped | 0.795 (ep7) | 0.800 (ep8) | 0.792 (ep10) | 0.796 |
+| clip 1.0 | 0.797 (ep10) | 0.803 (ep7) | 0.803 (ep8) | 0.801 |
+
+- GRL's test score for H2L3 is in W&B project `HRM-Pretrained-Recursion`, run `b-graphqa-H2L3` (`o2n3mu05`):
+  **0.834** (321/385), teacher-forced EM. It evaluates GRL's `graphqa-hrm-text-clip1-id` (Meta-ICL `8dfnfqn3`)
+  `last.ckpt`, which is epoch 8 (best val 0.865) or epoch 9 (val 0.852). The timestamps don't say which.
+  GRL's per-sample predictions: `../Graph-Representation-Learning-for-LLM/predictions/depth-b-graphqa/H2L3/`. They are
+  row-aligned with our test JSONL.
+- Root cause of most of the gap: `eval_graphqa.py --max_generation 32`. GraphQA gold answers reach 54 tokens on test,
+  57 on val and 62 on train. 9 test answers and 10 val answers exceed 32 tokens: long ConnectedNodes and
+  DisconnectedNodes node lists. In all 6 runs, our output on those 9 test items stops mid-list on a correct prefix.
+  GRL gets all 9 right. That is why ConnectedNodes was exactly 28/34 in every run. Confidence: high.
+- Upper bound if those answers had finished correctly: clip 0.821 / 0.826 / 0.826 (mean 0.824), unclipped 0.818 /
+  0.823 / 0.816 (mean 0.819), about 1 point under GRL's 0.834. Confidence: medium (bound, not a measurement).
+- Clipping: +0.5 points mean, inside noise (seed sd ~0.4 points, binomial SE ~2 points). It fired on 37-43% of steps.
+- Fix: `--max_generation` default and every driver set to 96 (longest prompt 1,324 + 96 < `--max_tokens 1536`).
+  The 32-token reports moved to `<ckpt>/gen32/`. The from-scratch queues (`lib_local_queue.sh`,
+  `run_graphqa_scaled.sh`) had the same 32 cap, so their existing GraphQA results undercount long list answers.
+- Re-evaluation at 96 tokens (partial, 2026-10-20 07:50): seed-0 val gains 8-10 samples at every epoch (+2.1 to +2.6
+  points). Epochs 1-6: 0.795, 0.787, 0.842, 0.810, 0.813, 0.829. ConnectedNodes val goes to 0.95-1.0. Zero-shot
+  gains 2 samples (test 0.390). Test and the other seeds: pending. Confidence: high.
+
+### DFM-Mimir-v1.5 fine-tune (queued 2026-10-20)
+
+`danish-foundation-models/DFM-Mimir-v1.5` (revision `521b40b`) is the same network as HRM-Text-1B (XL, 2 x 16 layers,
+hidden 1536, H2L3, 1.787B params). It uses the 262,144-token Gemma tokenizer and the Gemma chat format, and was
+pre-trained with `L_bp_cycles=[3, 3]` (bp 8). Confidence: high.
+
+- Data: `CHAT_TEMPLATE=data_io/chat_templates/gemma4_native_chat.jinja TOKENIZER=<HF_DIR>/tokenizer.json
+  prepare_dataset.sh` runs `scripts/tokenize_chat_template.py` (`template_mode: jinja_chat_template`):
+  `<bos><|turn>user\n{prompt}<turn|>\n<|turn>model\n` | `{answer}<turn|>\n`. Condition `direct` adds no system turn.
+  Sets: `graphqa_mimir_e20`, `graphqa_mimir_s{1,2}_e20` and `graphqa_mimir_val_e32`, with 922,395 train
+  tokens/epoch and nothing dropped.
+- The Rust tokenizer's `--template-mode gemma4-chat` is not usable for eval. It writes `template_mode: "Gemma4Chat"`
+  with HRM `boq`/`eoq`/`eoa`, which `simple_inference_engine.py` does not recognize, so it would build HRM-format
+  prompts and find no stop token.
+- Parity:
+  - All 3,080 train prompts are token-identical to `apply_chat_template` with the engine's tokenizer settings
+    (`bos_token=<bos>`; without it the leading `<bos>` is missing).
+  - Imported weights vs transformers `HrmTextForCausalLM`, fp32 CPU, one GraphQA sample: max logit diff 1.6e-4
+    (scale 26), every answer-token argmax agrees.
+- Recipe: `config/cfg_graphqa_mimir.yaml` inherits `cfg_graphqa_hrm1b` unchanged (8192 tokens/step, bp 5, lr 5e-5).
+  One-epoch bench (W&B `graphqa-mimir-bench`): 87 GB reserved of 96, ~1.2 it/s, validation and checkpoint save OK.
+- Driver: `scripts/graphs/run_graphqa_mimir_seeds.sh` (seeds 0-2 x {unclipped, clip 1.0}, through
+  `run_graphqa_hrm1b.sh` with `CONFIG`/`GROUP`/`TAG`/`HF_DIR`/`ROOT` overrides). Outputs go to
+  `/work/dfm/marius-ortega/dfm-hrm-graphs/graphqa_mimir`, W&B group `graphqa-mimir`. Results: pending.
 
 ## Fixes made 2026-10-19
 

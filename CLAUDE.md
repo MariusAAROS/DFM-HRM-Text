@@ -30,6 +30,9 @@ Results from the old stack are not used for comparisons any more.
   `lm-eval` and `math-verify` are, because `evaluation/benchmarks.py` imports them.
 - Machine: one **RTX PRO 6000 Blackwell (SM120, CC 12.0, 96 GB)**, no SLURM.
 - Always set `OMP_NUM_THREADS=1 MKL_NUM_THREADS=1` for training, and put `.venv/bin` on `PATH` (torchrun).
+- **Run every training and eval detached from the SSH/Claude session**, so quitting or a dropped session does not
+  kill it: `setsid nohup bash <script> > <log> 2>&1 < /dev/null &`. Never launch long jobs as children of the
+  interactive shell (including Claude Code background tasks).
 - `data_io/` is a submodule (`git submodule update --init data_io`). Its Rust tokenizer must be built and run
   from `data_io/tokenizer` with `RUSTUP_TOOLCHAIN=stable`: rustup has toolchains but no default here.
 
@@ -95,10 +98,20 @@ Results from the old stack are not used for comparisons any more.
   sampled as `graphqa_grl_e20` (train) and `graphqa_grl_val_e32` (val).
 - GRL's `val/exact_match` is **teacher-forced** (argmax == label on every answer token; nothing after the answer is
   checked). `eval_graphqa.py` reports it as `tf_exact_match`, next to greedy-generation `accuracy`.
+  Compare models on `accuracy` (greedy generation); teacher-forced EM does not show that the model can generate.
+- GRL's H2L3 test score is in W&B project `HRM-Pretrained-Recursion`, run `b-graphqa-H2L3` (0.834, clip1 GRL model).
+- `--max_generation` must cover the longest answer (GraphQA: 62 tokens). It is 96 everywhere; the old 32 cut off long
+  ConnectedNodes/DisconnectedNodes lists (9 test samples, ~2.3 points).
 - 1B fine-tune on one RTX PRO 6000: ~1.3 it/s at 8192 tokens/step, 76 GB peak. Eval: `--max_tokens 1536
   --batch_size 32` (GraphQA prompts reach ~1,330 tokens; the KV cache of 8 H/L applications x 16 layers is large).
 - Driver: `bash scripts/graphs/run_graphqa_hrm1b.sh` (import, train, val per epoch, test at the best val epoch,
   zero-shot baseline, W&B group `graphqa-hrm1b`).
+- DFM-Mimir-v1.5: same network, Gemma tokenizer (262k vocab) and chat format. Data via
+  `CHAT_TEMPLATE=data_io/chat_templates/gemma4_native_chat.jinja TOKENIZER=... prepare_dataset.sh` (the Python
+  `tokenize_chat_template.py`; the Rust `gemma4-chat` mode's metadata is not understood by inference). Config
+  `cfg_graphqa_mimir`, driver `scripts/graphs/run_graphqa_mimir_seeds.sh`, W&B group `graphqa-mimir`, 87 GB peak.
+- Queues share the GPU via `flock /work/dfm/marius-ortega/dfm-hrm-graphs/locks/gpu0.lock`. Never edit a bash
+  driver while a queue is running it: bash reads scripts incrementally, so the running instance can execute garbage.
 
 ## Commands
 

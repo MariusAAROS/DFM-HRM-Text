@@ -15,6 +15,10 @@
 #   <|im_start|> <condition token(s)> instruction <|im_end|> | response <|box_end|>
 # The tokenizer path is passed as an absolute path because data_io records it verbatim in
 # tokenizer_info.json, and simple_inference_engine reloads the tokenizer from there.
+#
+# CHAT_TEMPLATE=<jinja> switches to scripts/tokenize_chat_template.py (template_mode jinja_chat_template), the
+# format of the Gemma-tokenizer DFM models such as DFM-Mimir-v1.5. Condition "direct" adds no system turn, so
+# the prompt is one user turn, as InferenceCheckpoint.tokenize_prompt builds it at eval time. Pass TOKENIZER too.
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
@@ -26,6 +30,7 @@ CONTEXT_SIZE=${4:-4097}  # max sample length + 1 (AR shift); dataset_new.py subt
 SEED=${SEED:-0}
 PY=${PY:-$REPO/.venv/bin/python}
 TOKENIZER=${TOKENIZER:-$REPO/data_io/trained_tokenizers/bpe/tokenizer.json}
+CHAT_TEMPLATE=${CHAT_TEMPLATE:-}
 ROOT=${ROOT:-$REPO/data/graphs}
 # rustup on this machine has toolchains (stable, 1.95.0) but no default; the crate needs edition 2024.
 export RUSTUP_TOOLCHAIN=${RUSTUP_TOOLCHAIN:-stable}
@@ -44,8 +49,13 @@ ln "$TRAIN_JSONL" "$IN_DIR/train.jsonl" 2>/dev/null || cp -p "$TRAIN_JSONL" "$IN
 # 2. Tokenize. Must run from data_io/tokenizer (Cargo.toml). One output tree per dataset:
 #    the tokenizer prunes subdirs of the output dir that have no matching input.
 mkdir -p "$TOK_DIR"
-(cd data_io/tokenizer && cargo run --release --quiet --bin tokenizer -- \
-    "$IN_DIR" -o "$TOK_DIR" --tokenizer-path "$TOKENIZER" --template-mode hrm)
+if [[ -n $CHAT_TEMPLATE ]]; then
+  "$PY" scripts/tokenize_chat_template.py "$IN_DIR" -o "$TOK_DIR" --tokenizer-path "$TOKENIZER" \
+      --chat-template "$CHAT_TEMPLATE" --force
+else
+  (cd data_io/tokenizer && cargo run --release --quiet --bin tokenizer -- \
+      "$IN_DIR" -o "$TOK_DIR" --tokenizer-path "$TOKENIZER" --template-mode hrm)
+fi
 
 # 3. Sample all rows into per-epoch shuffles.
 rm -rf "$OUT_DIR"; mkdir -p "$OUT_DIR"

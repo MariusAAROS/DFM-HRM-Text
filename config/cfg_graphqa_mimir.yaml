@@ -1,0 +1,20 @@
+# Full fine-tune of DFM-Mimir-v1.5 (danish-foundation-models/DFM-Mimir-v1.5) on GraphQA with the HRM-Text-1B recipe
+# (cfg_graphqa_hrm1b: same splits, prompt, lr / betas / weight decay / gradient budget, 8192 tokens per step).
+# Mimir is the same network (size XL, 2 x 16 layers, hidden 1536, H2L3) with the 262,144-token Gemma tokenizer, so
+# the data is tokenized in its chat format (prepare_dataset.sh with CHAT_TEMPLATE=data_io/chat_templates/
+# gemma4_native_chat.jinja, template_mode jinja_chat_template): <bos><|turn>user\n{prompt}<turn|>\n<|turn>model\n |
+# {answer}<turn|>\n, generation stops at <turn|>.
+# Mimir was pre-trained with L_bp_cycles=[3, 3] (bp_max_steps 8); the fine-tune keeps HRM-Text-1B's 5 for comparability.
+#
+# Driver: bash scripts/graphs/run_graphqa_mimir_seeds.sh (import, train, val per epoch, test at the best val epoch).
+defaults:
+  - cfg_graphqa_hrm1b
+  - _self_
+
+wandb_group: graphqa-mimir
+
+data:
+  path: data/graphs/sampled/graphqa_mimir_e20
+  validation_path: data/graphs/sampled/graphqa_mimir_val_e32
+
+init_weights_path: /work/dfm/marius-ortega/dfm-hrm-graphs/hf/DFM-Mimir-v1.5/unsharded_step_0.pt
