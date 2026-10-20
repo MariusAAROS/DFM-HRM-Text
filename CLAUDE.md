@@ -144,6 +144,10 @@ bash scripts/graphs/run_graphqa_scaled.sh
   gradient signal. The full-BP arm de-confounds it. The logged `bp_steps` is the number of block applications
   with gradient (H_bp + L_bp): H×(L+1) under full BP, e.g. 21 for H3L6.
 - The `data_io` tokenizer does not follow symlinks; `prepare_dataset.sh` hard-links or copies its input.
+- Seeds: `seed` in the training config only seeds the random weight init. The data order (shuffle + packing per epoch)
+  is fixed when the dataset is sampled (`SEED=<s> bash scripts/graphs/prepare_dataset.sh ...` →
+  `<name>_s<s>_e<E>`), and the dataloader adds no randomness. A fine-tune with `init_weights_path` is therefore
+  identical across `seed` values (up to GPU kernel noise): replicate it by training on a reseeded dataset.
 - In-training validation (`data.validation_path`): every validation call restarts the val iterator, which moves to the
   next `epoch_N/` dir. Sample the val set with at least one epoch per validation call, and set `validation_batches`
   above its batch count, or alternate calls score a leftover fragment.

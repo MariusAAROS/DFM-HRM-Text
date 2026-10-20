@@ -6,6 +6,9 @@
 #   e.g. bash scripts/graphs/prepare_dataset.sh graphqa data/graphs/graphqa/hrm-text/standard/train.jsonl 20
 #
 # Output: data/graphs/sampled/<name>_e<epochs>/   (train with data.path=<that dir>)
+# SEED=<s> (default 0) reseeds the per-epoch shuffle (sample order and packing) -> <name>_s<s>_e<epochs>/.
+# This is the only source of run-to-run variation in a fine-tune: pretrain.py's `seed` only sets the
+# random init, which init_weights_path overwrites, and the training dataloader adds no randomness.
 # <epochs> MUST equal `epochs` in the training config: one epoch_N/ index dir is consumed per epoch.
 #
 # Template (data_io --template-mode hrm, identical to the old scripts/prepare_sft_data.py):
@@ -20,6 +23,7 @@ NAME=${1:?name}
 TRAIN_JSONL=$(realpath "${2:?train.jsonl}")
 EPOCHS=${3:?epochs}
 CONTEXT_SIZE=${4:-4097}  # max sample length + 1 (AR shift); dataset_new.py subtracts 1
+SEED=${SEED:-0}
 PY=${PY:-$REPO/.venv/bin/python}
 TOKENIZER=${TOKENIZER:-$REPO/data_io/trained_tokenizers/bpe/tokenizer.json}
 ROOT=${ROOT:-$REPO/data/graphs}
@@ -28,7 +32,7 @@ export RUSTUP_TOOLCHAIN=${RUSTUP_TOOLCHAIN:-stable}
 
 IN_DIR=$ROOT/tok_in/$NAME
 TOK_DIR=$ROOT/tokenized/$NAME
-OUT_DIR=$ROOT/sampled/${NAME}_e${EPOCHS}
+OUT_DIR=$ROOT/sampled/${NAME}$( [[ $SEED == 0 ]] || echo "_s$SEED" )_e${EPOCHS}
 
 [[ -f data_io/tokenizer/Cargo.toml ]] || { echo "data_io submodule missing: git submodule update --init data_io" >&2; exit 1; }
 
@@ -48,7 +52,7 @@ rm -rf "$OUT_DIR"; mkdir -p "$OUT_DIR"
 "$PY" data_io/sample_tokenized.py \
     tokenized_path="$TOK_DIR" output_path="$OUT_DIR" \
     prefix_config_path="$REPO/scripts/graphs/prefix_config_graphs.yaml" \
-    epochs="$EPOCHS" context_size="$CONTEXT_SIZE" > "$OUT_DIR/show_analytics.md"
+    epochs="$EPOCHS" context_size="$CONTEXT_SIZE" seed="$SEED" > "$OUT_DIR/show_analytics.md"
 cp "$TOKENIZER" "$OUT_DIR/tokenizer.json"  # self-contained copy, like the old prepared dirs
 
 # 4. No silent drops: every input row (minus empty responses) must be in every epoch.

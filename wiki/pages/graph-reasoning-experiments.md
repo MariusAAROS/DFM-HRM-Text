@@ -122,10 +122,14 @@ Results, seed 0 (`scripts/graphs/run_graphqa_hrm1b.sh`; W&B group `graphqa-hrm1b
 | --- | ---: | ---: | ---: |
 | zero-shot (imported, step 0) | 0.000 | 0.000 | 0.384 |
 | best val epoch (7 of 10) | 0.829 | 0.795 | 0.795 |
+| `gradient_clip_norm=1.0`, best val epoch (10 of 10) | 0.829 | 0.797 | 0.797 |
 | GRL `hrm-text-id` (2 runs), best val epoch | 0.849 / 0.852 | not logged | |
 | GRL `graphqa-hrm-text-clip1-id`, best val epoch | 0.865 | not logged | |
 
 - Per-epoch val tf_EM: 0.769, 0.761, 0.816, 0.790, 0.787, 0.803, 0.829, 0.821, 0.797, 0.818.
+- Clipped at 1.0 (GRL `-clip1` recipe): per-epoch val 0.709, 0.735, 0.777, 0.808, 0.808, 0.821, 0.784, 0.821, 0.816,
+  0.829. It starts slower, ends at the same best val, and gives the same test score (0.797 vs 0.795, one sample apart).
+  Here clipping does not reproduce the +1.3 points GRL saw (0.865 vs 0.852). Only its test report was logged to W&B.
 - Test per task at epoch 7 matches GRL's per-task profile:
   - MaximumFlow 0.18, TriangleCounting 0.53, EdgeCount 0.62;
   - CycleCheck, EdgeExistence, NodeCount and Reachability at 1.0.
