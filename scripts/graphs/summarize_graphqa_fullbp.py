@@ -47,7 +47,7 @@ def load(root: str, split: str) -> pd.DataFrame:
             report = json.load(f)
         rows.append(dict(run=run, H=int(m["H"]), L=int(m["L"]), seed=int(m["seed"]),
                          bp=FULL_BP if m["regime"] == "fullbp" else TRUNC_BP, split=split,
-                         accuracy=report["accuracy"], correct=report["correct"], n=report["n"]))
+                         accuracy=report.get("greedy_acc", report.get("accuracy")), correct=report["correct"], n=report["n"]))
     return pd.DataFrame(rows)
 
 

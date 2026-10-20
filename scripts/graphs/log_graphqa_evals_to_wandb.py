@@ -1,7 +1,8 @@
 """Log finished scaled-GraphQA eval reports (ckpts/<run>/eval_<set>_<split>_ep<e>.json) to wandb.
 
 One wandb run per report, with the same keys eval_graphqa.py --wandb_project writes
-(config H_cycles / L_cycles / ..., metrics eval/accuracy, eval/f1, ..., eval/samples table),
+(config H_cycles / L_cycles / ..., metrics eval/greedy_acc, eval/greedy_em, eval/tf_em, eval/f1, ..., eval/samples
+table; reports written before 2026-10-20 carry accuracy / tf_exact_match, logged as greedy_acc / greedy_em),
 so the report notebooks' CSV-export workflow applies unchanged. Adds eval/acc_no_maxflow,
 per-task eval/task/<Task> accuracies, and config fields model / eval_set / split / epoch.
 
@@ -64,7 +65,7 @@ def main():
 
         per_task = defaultdict(lambda: [0, 0])
         for s in report["samples"]:
-            per_task[tasks[s["id"]]][0] += int(s["correct"])
+            per_task[tasks[s["id"]]][0] += int(s.get("greedy_acc", s.get("correct")))
             per_task[tasks[s["id"]]][1] += 1
         no_mf = [v for t, v in per_task.items() if t != "MaximumFlow"]
 
@@ -94,22 +95,25 @@ def main():
             },
         )
         wandb.log({
-            "eval/accuracy": report["accuracy"], "eval/correct": report["correct"], "eval/n": report["n"],
+            "eval/greedy_acc": report.get("greedy_acc", report.get("accuracy")), "eval/correct": report["correct"],
+            "eval/n": report["n"],
             "eval/precision": report["precision"], "eval/recall": report["recall"], "eval/f1": report["f1"],
             "eval/hits_at_1": report["hits_at_1"],
-            **({"eval/tf_exact_match": report["tf_exact_match"]} if "tf_exact_match" in report else {}),
+            **({"eval/greedy_em": report.get("greedy_em", report.get("tf_exact_match"))}
+               if "greedy_em" in report or "tf_exact_match" in report else {}),
+            **({"eval/tf_em": report["tf_em"]} if "tf_em" in report else {}),
             "eval/acc_no_maxflow": sum(c for c, _ in no_mf) / max(1, sum(n for _, n in no_mf)),
             **{f"eval/task/{t}": c / n for t, (c, n) in sorted(per_task.items())},
         })
-        table = wandb.Table(columns=["id", "task", "gold", "pred", "correct", "precision", "recall", "f1", "hits_at_1"])
+        table = wandb.Table(columns=["id", "task", "gold", "pred", "greedy_acc", "precision", "recall", "f1", "hits_at_1"])
         for s in report["samples"]:
-            table.add_data(s["id"], tasks[s["id"]], s["gold"], s["pred"], s["correct"],
+            table.add_data(s["id"], tasks[s["id"]], s["gold"], s["pred"], s.get("greedy_acc", s.get("correct")),
                            s["precision"], s["recall"], s["f1"], s["hits_at_1"])
         wandb.log({"eval/samples": table})
         wandb.finish()
 
         open(path + ".wandb", "w").close()
-        print(f"logged {run} {set_name}/{split} ep{epoch}: acc={report['accuracy']:.3f}")
+        print(f"logged {run} {set_name}/{split} ep{epoch}: greedy_acc={report.get('greedy_acc', report.get('accuracy')):.3f}")
 
 
 if __name__ == "__main__":

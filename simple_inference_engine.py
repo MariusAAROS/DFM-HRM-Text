@@ -336,13 +336,19 @@ def _batched_decode(model: nn.Module, carry: Carry, inputs: Tensor, cache: Any, 
 
 
 @torch.inference_mode()
-def inference_generate(ckpt: InferenceCheckpoint, iterator: Iterator[tuple[int, tuple[str, str]]], max_tokens: int, max_generation: int, batch_size: int, temp: float = 0.0) -> Generator[tuple[int, str], None]:
+def inference_generate(ckpt: InferenceCheckpoint, iterator: Iterator[tuple[int, tuple[str, str]]], max_tokens: int, max_generation: int, batch_size: int, temp: float = 0.0, return_tokens: bool = False) -> Generator[tuple, None]:
+    """Yields (id, text), or (id, text, generated token ids incl. the stop token) with return_tokens."""
+    def emit(i):
+        tokens = generated[i, generated_starts[i]: generated_lengths[i]]
+        text = ckpt.decode_generation(tokens, stop_token)
+        return (generation_ids[i], text, tokens.copy()) if return_tokens else (generation_ids[i], text)
+
     def fetch_next():
         for pid, p_tuple in iterator:
             tok = ckpt.tokenize_prompt(*p_tuple)
             # Check length: if it exceeds or equals max_tokens, it will overflow buffers
             if tok.size >= max_tokens:
-                yield pid, ""  # Instantly yield empty string to the caller
+                yield (pid, "", np.empty(0, dtype=np.int64)) if return_tokens else (pid, "")  # Instantly yield empty string to the caller
             else:
                 return pid, tok
         return -1, None
@@ -387,7 +393,7 @@ def inference_generate(ckpt: InferenceCheckpoint, iterator: Iterator[tuple[int, 
 
             # ---- De-tokenize & yield (Overlap with prefill)
             if generation_ids[i] != -1:
-                yield generation_ids[i], ckpt.decode_generation(generated[i, generated_starts[i]: generated_lengths[i]], stop_token)
+                yield emit(i)
                 generation_ids[i] = -1
 
             # ---- Prefetch tokenized (Overlap with prefill)
@@ -423,4 +429,4 @@ def inference_generate(ckpt: InferenceCheckpoint, iterator: Iterator[tuple[int, 
     # Flush: yield any remaining completed generations that were left in the pipeline
     for i in range(batch_size):
         if generation_ids[i] != -1:
-            yield generation_ids[i], ckpt.decode_generation(generated[i, generated_starts[i]: generated_lengths[i]], stop_token)
+            yield emit(i)

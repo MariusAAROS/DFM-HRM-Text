@@ -86,7 +86,7 @@ def main():
                 counts[labels[s["id"]]][0] += sum(g == p for g, p in zip(gold, pred))
                 counts[labels[s["id"]]][1] += len(gold)
             else:
-                counts[labels[s["id"]]][0] += int(s["correct"])
+                counts[labels[s["id"]]][0] += int(s.get("greedy_acc", s.get("correct")))
                 counts[labels[s["id"]]][1] += 1
         if not args.per_query:
             assert sum(c for c, _ in counts.values()) == report["correct"], path  # reproduces the report

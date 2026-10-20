@@ -2,8 +2,9 @@
 # =====================================================================
 # Fine-tune the pretrained HRM-Text-1B on GraphQA (config/cfg_graphqa_hrm1b.yaml) and evaluate it the way
 # Graph-Representation-Learning-for-LLM did: val at every epoch, test on the epoch with the best val
-# teacher-forced exact match (GRL's val/exact_match, here eval/tf_exact_match), plus the zero-shot
-# (step 0) model. Greedy-generation exact match (eval/accuracy) and per-task accuracy are reported too.
+# teacher-forced exact match (GRL's val/exact_match, here eval/tf_em), plus the zero-shot (step 0) model.
+# Greedy-generation accuracy (eval/greedy_acc, the headline metric), greedy_em and per-task accuracy are reported too.
+# Reports from before 2026-10-20 have accuracy / tf_exact_match (= greedy_acc / greedy_em) and no tf_em.
 #
 # W&B: project HRM-Graph, group graphqa-hrm1b (train and eval runs, told apart by job_type).
 #
@@ -32,7 +33,12 @@ export PATH="$(dirname "$PY"):$PATH"
 export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
 export WANDB_MODE="${WANDB_MODE:-online}"  # never "disabled": all_config.yaml (needed by eval) is only written with a wandb run
 
-EPOCHS="$(sed -n 's/^epochs: *\([0-9]*\).*/\1/p' "config/$CONFIG.yaml")"
+# From the composed config: `epochs` may be inherited (cfg_graphqa_mimir sets none of its own).
+EPOCHS="$("$PY" -c "
+from hydra import compose, initialize_config_dir
+with initialize_config_dir(config_dir='$PWD/config', version_base=None):
+    print(compose(config_name='$CONFIG').epochs)")"
+[[ $EPOCHS =~ ^[0-9]+$ ]] || { echo "could not read epochs from $CONFIG: '$EPOCHS'" >&2; exit 1; }
 CKPT="$ROOT/ckpts/$RUN"
 mkdir -p "$ROOT/logs" "$CKPT"
 log() { echo "[$(date '+%F %T')] $*"; }
@@ -76,7 +82,9 @@ done
 BEST="$("$PY" - "$CKPT" "$EPOCHS" <<'PY'
 import json, sys
 ckpt, epochs = sys.argv[1], int(sys.argv[2])
-scores = {e: json.load(open(f"{ckpt}/eval_grl_val_ep{e}.json"))["tf_exact_match"] for e in range(1, epochs + 1)}
+def tf(r):  # pre-2026-10-20 reports: tf_exact_match (= greedy_em) was the selection metric
+    return r["tf_em"] if "tf_em" in r else r["tf_exact_match"]
+scores = {e: tf(json.load(open(f"{ckpt}/eval_grl_val_ep{e}.json"))) for e in range(1, epochs + 1)}
 print(max(scores, key=lambda e: (scores[e], -e)))
 PY
 )"
@@ -93,14 +101,15 @@ done
 import json, sys
 root, run, epochs, best = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
 load = lambda p: json.load(open(p))
-print(f"{'checkpoint':16s} {'split':5s} {'tf_EM':>6s} {'gen_EM':>6s}")
+fmt = lambda r: f"{r.get('tf_em', float('nan')):6.3f} {r.get('greedy_em', r.get('tf_exact_match')):6.3f} {r.get('greedy_acc', r.get('accuracy')):6.3f}"
+print(f"{'checkpoint':16s} {'split':5s} {'tf_em':>6s} {'g_em':>6s} {'g_acc':>6s}")
 for split in ("val", "test"):
     r = load(f"{root}/ckpts/zeroshot/eval_grl_{split}_ep0.json")
-    print(f"{'zero-shot':16s} {split:5s} {r['tf_exact_match']:6.3f} {r['accuracy']:6.3f}")
+    print(f"{'zero-shot':16s} {split:5s} {fmt(r)}")
 for e in range(1, epochs + 1):
     r = load(f"{root}/ckpts/{run}/eval_grl_val_ep{e}.json")
-    print(f"{run + ' ep' + str(e):16s} {'val':5s} {r['tf_exact_match']:6.3f} {r['accuracy']:6.3f}")
+    print(f"{run + ' ep' + str(e):16s} {'val':5s} {fmt(r)}")
 r = load(f"{root}/ckpts/{run}/eval_grl_test_ep{best}.json")
-print(f"{run + ' ep' + str(best):16s} {'test':5s} {r['tf_exact_match']:6.3f} {r['accuracy']:6.3f}")
+print(f"{run + ' ep' + str(best):16s} {'test':5s} {fmt(r)}")
 print("test per task:", {t: round(a, 3) for t, a in r["task_accuracy"].items()})
 PY

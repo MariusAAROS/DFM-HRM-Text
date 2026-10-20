@@ -1,13 +1,19 @@
 """Exact-match evaluation of a trained HRM-Text checkpoint on GraphQA-style JSONL (also MetaQA, KQA Pro, pointer).
 
 Ported from HRM-Text-for-Graphs/scripts/eval_graphqa.py. Answers are short and deterministic ("Yes.",
-a node id, a small list), so greedy decoding + normalized exact match is the metric. Set-based
-precision / recall / F1 / hits@1 over '|'-joined answers are reported alongside accuracy for the
-multi-answer variants (e.g. metaqa-gold-5); on single-answer data they reduce to exact match.
-`tf_exact_match` is the teacher-forced exact match of Graph-Representation-Learning-for-LLM
-(val/exact_match there: argmax == label at every answer token, ignoring what follows). Under greedy
-decoding it equals "the generation starts with the gold answer". Rows with a `task` field also get
-per-task accuracy.
+a node id, a small list). Three exact-match metrics, all from one greedy generation:
+  greedy_acc  normalize(pred) == normalize(gold): the whole answer, case / whitespace / trailing-period
+              insensitive, nothing generated after it. The headline metric (per-task: task_accuracy).
+  greedy_em   pred.startswith(gold) on raw strings: whitespace sensitive, ignores what follows.
+              (Called tf_exact_match before 2026-10-20; it is not teacher-forced.)
+  tf_em       teacher-forced exact match, GRL's val/exact_match (argmax == label at every answer token,
+              stop token and anything after excluded). Under greedy decoding this is exactly "the
+              generated token ids start with the gold answer's training token ids", so it is read off
+              the generation; it needs --max_generation >= the answer length (rows that do not fit are
+              counted wrong and reported as tf_em_unmeasured).
+Set-based precision / recall / F1 / hits@1 over '|'-joined answers are reported for the multi-answer
+variants (e.g. metaqa-gold-5); on single-answer data they reduce to exact match. Rows with a `task`
+field also get per-task greedy_acc.
 
 Generation uses simple_inference_engine.inference_generate (batched greedy decoding with a KV cache;
 prompt prefill is bidirectional like the PrefixLM training prefix). Prompts are tokenized exactly as in
@@ -138,21 +144,33 @@ def main():
 
     prompts = ((idx, (r.get("condition", "direct"), r["instruction"])) for idx, r in enumerate(rows))
     preds: dict[int, str] = {}
-    for idx, pred in inference_generate(ckpt, prompts, max_tokens=args.max_tokens,
-                                        max_generation=args.max_generation, batch_size=args.batch_size):
+    pred_ids: dict[int, list[int]] = {}
+    for idx, pred, ids in inference_generate(ckpt, prompts, max_tokens=args.max_tokens, max_generation=args.max_generation,
+                                             batch_size=args.batch_size, return_tokens=True):
         preds[idx] = pred
+        pred_ids[idx] = ids.tolist()
         if len(preds) % 500 == 0:
             print(f"  [{len(preds)}/{len(rows)}] generated", flush=True)
 
+    # Gold answer tokens exactly as training supervised them (stop token excluded): the chat-template tokenizer
+    # trims the response, the HRM (Rust) template does not.
+    chat = ckpt.tokenizer_info.get("template_mode") == "jinja_chat_template"
+    def gold_ids(gold: str) -> list[int]:
+        return ckpt.tokenizer(gold.strip() if chat else gold, add_special_tokens=False)["input_ids"]
+
     results = []
-    correct = tf_correct = 0
+    correct = em_correct = tf_correct = tf_unmeasured = 0
     per_task: dict[str, list[int]] = defaultdict(lambda: [0, 0])
     sum_p = sum_r = sum_f1 = sum_hits1 = 0.0
     for idx, row in enumerate(rows):
         pred, gold = preds[idx], row["response"]
         is_correct = normalize(pred) == normalize(gold)
-        tf_match = pred.startswith(gold)
+        em_match = pred.startswith(gold)
+        gold_tok = gold_ids(gold)
+        tf_match = pred_ids[idx][:len(gold_tok)] == gold_tok
+        tf_unmeasured += int(len(gold_tok) > args.max_generation)
         correct += int(is_correct)
+        em_correct += int(em_match)
         tf_correct += int(tf_match)
         if "task" in row:
             per_task[row["task"]][0] += int(is_correct)
@@ -162,13 +180,17 @@ def main():
         sum_r += r
         sum_f1 += f1
         sum_hits1 += hits1
-        results.append({"id": idx, "task": row.get("task"), "gold": gold, "pred": pred, "correct": is_correct,
-                        "tf_exact_match": tf_match,
+        results.append({"id": idx, "task": row.get("task"), "gold": gold, "pred": pred,
+                        "greedy_acc": is_correct, "greedy_em": em_match, "tf_em": tf_match,
                         "precision": p, "recall": r, "f1": f1, "hits_at_1": hits1})
 
     n = len(rows)
-    accuracy = correct / n if n else 0.0
-    tf_exact_match = tf_correct / n if n else 0.0
+    greedy_acc = correct / n if n else 0.0
+    greedy_em = em_correct / n if n else 0.0
+    tf_em = tf_correct / n if n else 0.0
+    if tf_unmeasured:
+        print(f"WARNING: {tf_unmeasured} gold answers are longer than --max_generation {args.max_generation}; "
+              "tf_em counts them wrong")
     task_accuracy = {t: c / k for t, (c, k) in sorted(per_task.items())}
     precision = sum_p / n if n else 0.0
     recall = sum_r / n if n else 0.0
@@ -184,9 +206,12 @@ def main():
         "trained_L_cycles": trained_L,
         "ratio_L_over_H": (L_cycles / H_cycles) if (H_cycles and L_cycles) else None,
         "n": n,
-        "correct": correct,
-        "accuracy": accuracy,
-        "tf_exact_match": tf_exact_match,
+        "correct": correct,  # greedy_acc count
+        "greedy_acc": greedy_acc,
+        "greedy_em": greedy_em,
+        "tf_em": tf_em,
+        "tf_em_unmeasured": tf_unmeasured,
+        "max_generation": args.max_generation,
         "task_accuracy": task_accuracy,
         "precision": precision,
         "recall": recall,
@@ -197,20 +222,20 @@ def main():
     }
 
     print(f"H_cycles={H_cycles} L_cycles={L_cycles}  "
-          f"accuracy = {accuracy:.4f} ({correct}/{n})  tf_exact_match = {tf_exact_match:.4f}  "
+          f"greedy_acc = {greedy_acc:.4f} ({correct}/{n})  greedy_em = {greedy_em:.4f}  tf_em = {tf_em:.4f}  "
           f"P = {precision:.4f}  R = {recall:.4f}  F1 = {f1:.4f}  hits@1 = {hits_at_1:.4f}")
 
     # ---- wandb log ----------------------------------------------------------
     if use_wandb:
-        wandb.log({"eval/accuracy": accuracy, "eval/tf_exact_match": tf_exact_match, "eval/correct": correct,
+        wandb.log({"eval/greedy_acc": greedy_acc, "eval/greedy_em": greedy_em, "eval/tf_em": tf_em, "eval/correct": correct,
                    "eval/n": n, "eval/precision": precision, "eval/recall": recall, "eval/f1": f1,
                    "eval/hits_at_1": hits_at_1, **{f"eval/task/{t}": a for t, a in task_accuracy.items()}})
 
         # Per-sample table for drill-down in the wandb UI
-        table = wandb.Table(columns=["id", "task", "gold", "pred", "correct", "tf_exact_match",
+        table = wandb.Table(columns=["id", "task", "gold", "pred", "greedy_acc", "greedy_em", "tf_em",
                                      "precision", "recall", "f1", "hits_at_1"])
         for r in results:
-            table.add_data(r["id"], r["task"], r["gold"], r["pred"], r["correct"], r["tf_exact_match"],
+            table.add_data(r["id"], r["task"], r["gold"], r["pred"], r["greedy_acc"], r["greedy_em"], r["tf_em"],
                            r["precision"], r["recall"], r["f1"], r["hits_at_1"])
         wandb.log({"eval/samples": table})
         wandb.finish()

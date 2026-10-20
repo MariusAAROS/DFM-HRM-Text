@@ -39,7 +39,7 @@ def load(root: str, name_re: re.Pattern, arm: str | None) -> list[dict]:
             report = json.load(f)
         rows.append(dict(run=run, arm=run_arm, n_layers=N_LAYERS.get(run_arm, 6), H=H, L=L, seed=int(m["seed"]),
                          split=e["split"], L_eval=1 if e["lov"] else L,
-                         accuracy=report["accuracy"], correct=report["correct"], n=report["n"]))
+                         accuracy=report.get("greedy_acc", report.get("accuracy")), correct=report["correct"], n=report["n"]))
     return rows
 
 

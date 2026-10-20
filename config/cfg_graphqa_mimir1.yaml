@@ -1,0 +1,13 @@
+# Full fine-tune of DFM-Mimir v1 (danish-foundation-models/DFM-Mimir) on GraphQA: cfg_graphqa_mimir (the v1.5 run) with
+# the v1 weights. Same network, byte-identical tokenizer, and its chat template renders every GraphQA prompt and answer
+# identically to data_io/chat_templates/gemma4_native_chat.jinja (it differs only in tool-response handling), so the
+# graphqa_mimir_* datasets are reused. Mimir v1 was pre-trained with L_bp_cycles=[0, 3] = bp_max_steps 5, as fine-tuned here.
+#
+# Driver: MIMIR=v1 bash scripts/graphs/run_graphqa_mimir_seeds.sh
+defaults:
+  - cfg_graphqa_mimir
+  - _self_
+
+wandb_group: graphqa-mimir1
+
+init_weights_path: /work/dfm/marius-ortega/dfm-hrm-graphs/hf/DFM-Mimir/unsharded_step_0.pt

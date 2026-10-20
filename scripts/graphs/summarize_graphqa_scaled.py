@@ -52,12 +52,12 @@ def main():
         per_task = defaultdict(lambda: [0, 0])
         for s in report["samples"]:
             t = tasks[s["id"]]
-            per_task[t][0] += int(s["correct"])
+            per_task[t][0] += int(s.get("greedy_acc", s.get("correct")))
             per_task[t][1] += 1
         no_mf = [v for t, v in per_task.items() if t != "MaximumFlow"]
         acc_no_mf = sum(c for c, _ in no_mf) / max(1, sum(n for _, n in no_mf))
         rows.append((os.path.basename(os.path.dirname(path)), set_name, split, epoch,
-                     report["accuracy"], acc_no_mf, dict(per_task)))
+                     report.get("greedy_acc", report.get("accuracy")), acc_no_mf, dict(per_task)))
 
     if not rows:
         print(f"No eval reports under {args.root}/ckpts")

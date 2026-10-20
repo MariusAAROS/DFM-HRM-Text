@@ -11,21 +11,29 @@
 #   bash scripts/graphs/prepare_dataset.sh graphqa_mimir_val data/graphs/graphqa/hrm-text-grl/standard/val.jsonl 32
 #
 # ACCUM=<n> sets gradient_accumulation_steps (same 8192 tokens per step, n microbatches).
+# MIMIR=v1 runs DFM-Mimir v1 (danish-foundation-models/DFM-Mimir, config cfg_graphqa_mimir1, W&B group graphqa-mimir1,
+# runs graphqa_mimir1_*) on the same datasets: identical tokenizer and identical GraphQA prompt renders.
 #
 # Detached from the shell / SSH session, behind any other job holding the GPU lock:
 #   setsid nohup flock /work/dfm/marius-ortega/dfm-hrm-graphs/locks/gpu0.lock bash scripts/graphs/run_graphqa_mimir_seeds.sh \
 #     >> /work/dfm/marius-ortega/dfm-hrm-graphs/graphqa_mimir/logs/seeds_queue.log 2>&1 < /dev/null &
 set -uo pipefail
 cd "$(dirname "$0")/../.."
-export ROOT=/work/dfm/marius-ortega/dfm-hrm-graphs/graphqa_mimir
-export HF_MODEL=danish-foundation-models/DFM-Mimir-v1.5
-export HF_DIR=/work/dfm/marius-ortega/dfm-hrm-graphs/hf/DFM-Mimir-v1.5
-export CONFIG=cfg_graphqa_mimir GROUP=graphqa-mimir TAG=mimir-finetune LOG_SPLITS=test
+if [[ ${MIMIR:-v1.5} == v1 ]]; then
+  NAME=graphqa_mimir1
+  export HF_MODEL=danish-foundation-models/DFM-Mimir HF_DIR=/work/dfm/marius-ortega/dfm-hrm-graphs/hf/DFM-Mimir
+  export CONFIG=cfg_graphqa_mimir1 GROUP=graphqa-mimir1 TAG=mimir1-finetune
+else
+  NAME=graphqa_mimir
+  export HF_MODEL=danish-foundation-models/DFM-Mimir-v1.5 HF_DIR=/work/dfm/marius-ortega/dfm-hrm-graphs/hf/DFM-Mimir-v1.5
+  export CONFIG=cfg_graphqa_mimir GROUP=graphqa-mimir TAG=mimir-finetune
+fi
+export ROOT=/work/dfm/marius-ortega/dfm-hrm-graphs/$NAME LOG_SPLITS=test
 ACCUM=${ACCUM:-1}
 mkdir -p "$ROOT/logs"
 for S in ${SEEDS:-0 1 2}; do
   for C in "" clip1; do
-    RUN=graphqa_mimir${C:+_$C}_s$S
+    RUN=$NAME${C:+_$C}_s$S
     DATA=data/graphs/sampled/graphqa_mimir$( [[ $S == 0 ]] || echo "_s$S" )_e20
     OV="data.path=$DATA seed=$S gradient_accumulation_steps=$ACCUM${C:+ gradient_clip_norm=1.0}"
     echo "=== $(date '+%F %T') $RUN ($OV)"

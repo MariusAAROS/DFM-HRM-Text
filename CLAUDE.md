@@ -96,9 +96,12 @@ Results from the old stack are not used for comparisons any more.
 - The HRM-Text-1B tokenizer equals `data_io/trained_tokenizers/bpe`, so the graph datasets need no re-tokenization.
   GRL's prompt adds `#### Question\n` before the question: `data/graphs/graphqa/hrm-text-grl` (with `task` labels),
   sampled as `graphqa_grl_e20` (train) and `graphqa_grl_val_e32` (val).
-- GRL's `val/exact_match` is **teacher-forced** (argmax == label on every answer token; nothing after the answer is
-  checked). `eval_graphqa.py` reports it as `tf_exact_match`, next to greedy-generation `accuracy`.
-  Compare models on `accuracy` (greedy generation); teacher-forced EM does not show that the model can generate.
+- `eval_graphqa.py` metrics (renamed 2026-10-20), all from one greedy generation:
+  - `greedy_acc` (was `accuracy`): normalized full-answer match, nothing generated after it. **Compare models on this.**
+  - `greedy_em` (was `tf_exact_match`): raw `pred.startswith(gold)`. Whitespace sensitive, and it is NOT teacher-forced.
+  - `tf_em`: GRL's teacher-forced `val/exact_match` (argmax == label on every answer token, stop token excluded),
+    read off the generation as "generated token ids start with the gold training token ids". Selects the best epoch.
+  - Old reports and W&B runs carry `accuracy`/`tf_exact_match`; readers fall back to them.
 - GRL's H2L3 test score is in W&B project `HRM-Pretrained-Recursion`, run `b-graphqa-H2L3` (0.834, clip1 GRL model).
 - `--max_generation` must cover the longest answer (GraphQA: 62 tokens). It is 96 everywhere; the old 32 cut off long
   ConnectedNodes/DisconnectedNodes lists (9 test samples, ~2.3 points).
@@ -110,6 +113,8 @@ Results from the old stack are not used for comparisons any more.
   `CHAT_TEMPLATE=data_io/chat_templates/gemma4_native_chat.jinja TOKENIZER=... prepare_dataset.sh` (the Python
   `tokenize_chat_template.py`; the Rust `gemma4-chat` mode's metadata is not understood by inference). Config
   `cfg_graphqa_mimir`, driver `scripts/graphs/run_graphqa_mimir_seeds.sh`, W&B group `graphqa-mimir`, 87 GB peak.
+  DFM-Mimir v1 (`danish-foundation-models/DFM-Mimir`): same tokenizer and data, `cfg_graphqa_mimir1`,
+  `MIMIR=v1 bash scripts/graphs/run_graphqa_mimir_seeds.sh`, W&B group `graphqa-mimir1`.
 - Queues share the GPU via `flock /work/dfm/marius-ortega/dfm-hrm-graphs/locks/gpu0.lock`. Never edit a bash
   driver while a queue is running it: bash reads scripts incrementally, so the running instance can execute garbage.
 
@@ -122,7 +127,7 @@ torchrun --standalone --nproc_per_node=1 pretrain.py --config-name cfg_graphqa \
   data.path=data/graphs/sampled/graphqa_e20 arch.H_cycles=2 arch.L_cycles=3 \
   run_name=graphqa_H2_L3 checkpoint_path=/work/dfm/marius-ortega/dfm-hrm-graphs/ckpts/graphqa_H2_L3
 
-# Evaluate (greedy + teacher-forced exact match, set P/R/F1/hits@1; reads H/L from all_config.yaml, --L_cycles
+# Evaluate (greedy_acc, greedy_em, tf_em, set P/R/F1/hits@1; reads H/L from all_config.yaml, --L_cycles
 # overrides). Logs to W&B HRM-Graph in the checkpoint's wandb_group; --no_wandb to skip.
 .venv/bin/python scripts/graphs/eval_graphqa.py --ckpt_path <ckpt_dir> \
   --data data/graphs/graphqa/hrm-text/standard/test.jsonl --use_ema \

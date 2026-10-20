@@ -110,15 +110,43 @@ Confidence: high.
   - lr 5e-5 constant, betas 0.9/0.999, wd 0.01, no EMA.
   - Differs from GRL in: AdamATan2 on fp32 master weights instead of AdamW on bf16 weights, 8192-token packed batches
     (~28 samples instead of 32), 20 warmup steps, a supervised `<|box_end|>`, and 10 epochs without early stopping.
-- GRL's `val/exact_match` is teacher-forced: argmax == label at each answer token. `eval_graphqa.py` reports it as
-  `tf_exact_match` (greedy output starts with the gold answer). Once fine-tuned, it equalled greedy normalized exact
-  match at every epoch.
-  - The two are equivalent under greedy decoding (by induction over answer positions), up to bf16 KV-cache vs
-    full-forward argmax flips, **only if `--max_generation` covers the whole answer**. Teacher forcing has no length
-    limit; generation does.
-  - Decision (2026-10-20): compare models on greedy-generation EM (`eval/accuracy`). Teacher-forced EM does not measure
-    whether the model can generate the answer. GRL only reports teacher-forced EM, so GRL comparisons use that metric
-    as given.
+- GRL's `val/exact_match` is teacher-forced (`src/models/meta_icl.py`): one forward pass over prompt + gold answer,
+  correct iff argmax == label at every answer token. Labels are only the answer tokens (GRL's collator masks the
+  prompt, special tokens and EOS), so stopping is never checked. Teacher forcing has no generation length limit.
+- **Superseded 2026-10-20:** `eval_graphqa.py`'s `tf_exact_match` was described here as GRL's metric. It is not
+  teacher-forced. It is `pred.startswith(gold)` on the raw strings of the greedy generation.
+- **Metrics since 2026-10-20** (`eval_graphqa.py`; all three come from the same greedy generation and differ only in
+  the comparison):
+  - `greedy_acc` (was `accuracy`, W&B `eval/accuracy`): `normalize(pred) == normalize(gold)` (case, whitespace and
+    trailing period ignored). The whole answer must be generated and nothing after it. **The comparison metric.**
+  - `greedy_em` (was `tf_exact_match`): `pred.startswith(gold)`. Raw prefix, whitespace sensitive, ignores trailing
+    text.
+  - `tf_em` (new): GRL's teacher-forced EM. Under greedy decoding, "argmax == gold at every answer token" is the same
+    event as "the generated token ids start with the gold answer's training token ids" (by induction over answer
+    positions), so it is read off the generation's token ids at no extra cost. The gold ids are the response as
+    trained (trimmed for the chat template, as-is for the HRM template), stop token excluded. It needs
+    `--max_generation` >= the answer length (`tf_em_unmeasured` counts rows that do not fit). The driver selects
+    the best val epoch on `tf_em`, as GRL does.
+  - Readers (`run_graphqa_hrm1b.sh`, `log_graphqa_evals_to_wandb.py`, `summarize_*.py`) fall back to
+    `accuracy`/`tf_exact_match` for older reports. W&B runs from before the rename have `eval/accuracy` and
+    `eval/tf_exact_match`.
+- Measured against an independent teacher-forced pass (prefill the prompt, feed the gold answer tokens through the
+  KV cache, compare argmaxes), test, 385 samples. Confidence: high.
+
+| Checkpoint | true TF-EM | `greedy_em` (startswith) | `greedy_acc` |
+| --- | ---: | ---: | ---: |
+| HRM-1B s0 ep7, `--max_generation 96` | 0.818 | 0.818 (385/385 samples agree) | 0.818 (385/385) |
+| HRM-1B s0 ep7, `--max_generation 32` | 0.818 | 0.795 (376/385) | 0.795 (376/385) |
+| Mimir clip1_s2 ep10, 96 | 0.823 | 0.709 (341/385) | 0.823 (385/385) |
+
+  - At 32 tokens, the 9 mismatches are the cut-off ConnectedNodes/DisconnectedNodes lists. TF-EM counts them
+    correct.
+  - For Mimir, all 44 mismatches are NodeCount/EdgeCount items whose gold starts with a space (`' 4.'`, while
+    the model emits the trimmed `'4.'` it was trained on).
+  - On these checkpoints `greedy_acc` equals true TF-EM per sample: the fine-tuned models stop right after the
+    answer.
+- Decision (2026-10-20): compare models on `greedy_acc`. Teacher-forced EM does not measure whether the model can
+  generate the answer. GRL only reports teacher-forced EM, so GRL comparisons use that metric as given.
 - One RTX PRO 6000: 1.3 it/s, 76 GB peak, 1,100 steps in about 18 minutes. Evaluating 385 samples takes about 75 s at
   `--max_tokens 1536 --batch_size 32`.
   - Breakdown (2026-10-20, 64 samples at batch 8, sharing the GPU with another eval): imports 11 s, load 3.5 s,
@@ -130,6 +158,8 @@ Confidence: high.
 Results, seed 0 (`scripts/graphs/run_graphqa_hrm1b.sh`; W&B group `graphqa-hrm1b`).
 **Superseded 2026-10-20:** these evals used `--max_generation 32`, which cut off 9 test and 10 val answers. See
 [Generation-length bug and GRL test comparison](#generation-length-bug-and-grl-test-comparison-2026-10-20).
+"tf_EM" in this table and the next bullets is the old `tf_exact_match`, now `greedy_em`, not true teacher-forced EM.
+"gen EM" is `greedy_acc`.
 
 | Checkpoint | val tf_EM | test tf_EM | test gen EM |
 | --- | ---: | ---: | ---: |
@@ -178,9 +208,18 @@ with `--max_generation 32` (W&B group `graphqa-hrm1b`, 2026-10-19):
 - Fix: `--max_generation` default and every driver set to 96 (longest prompt 1,324 + 96 < `--max_tokens 1536`).
   The 32-token reports moved to `<ckpt>/gen32/`. The from-scratch queues (`lib_local_queue.sh`,
   `run_graphqa_scaled.sh`) had the same 32 cap, so their existing GraphQA results undercount long list answers.
-- Re-evaluation at 96 tokens (partial, 2026-10-20 07:50): seed-0 val gains 8-10 samples at every epoch (+2.1 to +2.6
-  points). Epochs 1-6: 0.795, 0.787, 0.842, 0.810, 0.813, 0.829. ConnectedNodes val goes to 0.95-1.0. Zero-shot
-  gains 2 samples (test 0.390). Test and the other seeds: pending. Confidence: high.
+- Re-evaluation at 96 tokens (2026-10-20, all 6 runs). Each run's best val epoch is unchanged, and test equals the
+  upper bound above. Confidence: high.
+
+| Arm | s0 | s1 | s2 | mean +- sd | best val (s0/s1/s2) |
+| --- | ---: | ---: | ---: | ---: | --- |
+| unclipped | 0.818 (ep7) | 0.823 (ep8) | 0.816 (ep10) | 0.819 +- 0.004 | 0.855 / 0.857 / 0.844 |
+| clip 1.0 | 0.821 (ep10) | 0.826 (ep7) | 0.826 (ep8) | 0.824 +- 0.003 | 0.855 / 0.855 / 0.857 |
+| GRL clip1 (`last.ckpt`) | | | | 0.834 | 0.865 |
+
+  - The clipped arm is 1.0 point (4 samples) under GRL on test, and our val (0.844-0.857) is within GRL's
+    0.849-0.865. One GRL run, so no gap is established.
+  - ConnectedNodes is now 0.971 and DisconnectedNodes 0.95-1.0 on test, the same as GRL. Zero-shot test: 0.390.
 
 ### DFM-Mimir-v1.5 fine-tune (queued 2026-10-20)
 
@@ -205,7 +244,48 @@ pre-trained with `L_bp_cycles=[3, 3]` (bp 8). Confidence: high.
   One-epoch bench (W&B `graphqa-mimir-bench`): 87 GB reserved of 96, ~1.2 it/s, validation and checkpoint save OK.
 - Driver: `scripts/graphs/run_graphqa_mimir_seeds.sh` (seeds 0-2 x {unclipped, clip 1.0}, through
   `run_graphqa_hrm1b.sh` with `CONFIG`/`GROUP`/`TAG`/`HF_DIR`/`ROOT` overrides). Outputs go to
-  `/work/dfm/marius-ortega/dfm-hrm-graphs/graphqa_mimir`, W&B group `graphqa-mimir`. Results: pending.
+  `/work/dfm/marius-ortega/dfm-hrm-graphs/graphqa_mimir`, W&B group `graphqa-mimir`.
+- First pass (2026-10-20 09:03-11:16): all 6 runs trained 10 epochs (~21 min each), but every val/test eval was
+  skipped. `run_graphqa_hrm1b.sh` read `epochs` with `sed` from the config file, and `cfg_graphqa_mimir` only inherits
+  it. The driver now reads `epochs` from the composed Hydra config and exits if it is missing. Evals relaunched
+  at 11:18.
+- Zero-shot (Gemma chat format, no fine-tune): val 0.507, test 0.486 (HRM-Text-1B: 0.39).
+- Results (2026-10-20, evals finished 12:44). Greedy-generation test accuracy at the best val epoch, 385 samples:
+
+| Model, arm | s0 | s1 | s2 | mean +- sd |
+| --- | ---: | ---: | ---: | ---: |
+| HRM-Text-1B, unclipped | 0.818 (ep7) | 0.823 (ep8) | 0.816 (ep10) | 0.819 +- 0.004 |
+| Mimir-v1.5, unclipped | 0.823 (ep9) | 0.836 (ep10) | 0.810 (ep10) | 0.823 +- 0.013 |
+| HRM-Text-1B, clip 1.0 | 0.821 (ep10) | 0.826 (ep7) | 0.826 (ep8) | 0.824 +- 0.003 |
+| Mimir-v1.5, clip 1.0 | 0.823 (ep7) | 0.808 (ep8) | 0.823 (ep10) | 0.818 +- 0.009 |
+
+  - Fine-tuned, Mimir and HRM-Text-1B are tied. Over the 6 paired runs, HRM alone gets 73 test samples right and
+    Mimir alone 71. Mimir's seed spread is 2-4x larger. Its +9.6-point zero-shot lead does not carry over.
+    Confidence: high.
+  - Per task (pooled over 6 runs): Mimir is better on EdgeCount (0.673 vs 0.571, n=156) and slightly worse on
+    MaximumFlow (0.162 vs 0.201) and NodeDegree (0.838 vs 0.858). The other tasks are within 1.5 points.
+  - Best val: Mimir 0.826-0.855, HRM 0.844-0.857.
+  - Mimir's `greedy_em` (then `tf_exact_match`) reads low (e.g. 0.709 vs `greedy_acc` 0.823) because of formatting,
+    not the model. NodeCount/EdgeCount gold answers start with a space (`' 4.'`), and `tokenize_chat_template.py`
+    trims the response, so the model learns `'4.'` and `pred.startswith(gold)` fails. True TF-EM on the trained
+    (trimmed) tokens equals `greedy_acc` (see the metrics section). These runs selected the best epoch on the old
+    `tf_exact_match`, which picks the same epoch as `greedy_acc` in all 6 runs.
+
+### DFM-Mimir v1 fine-tune (queued 2026-10-20)
+
+`danish-foundation-models/DFM-Mimir` (revision `396df88`) has the same network as v1.5 (1.787B params). Its
+`tokenizer.json` is byte-identical to v1.5's. It was pre-trained with `L_bp_cycles=[0, 3]` (bp 5, the fine-tune budget
+here; v1.5 used bp 8). Confidence: high.
+
+- Its `chat_template.jinja` differs from `data_io/chat_templates/gemma4_native_chat.jinja` only in tool-response
+  handling. All 3,465 GraphQA train+test prompts and 200/200 prompt+answer renders are identical, so the
+  `graphqa_mimir_*` datasets are reused.
+- Import parity (fp32 CPU, one GraphQA sample, vs transformers): max logit diff 2.0e-4 (scale 23), every
+  answer-token argmax agrees.
+- Config `cfg_graphqa_mimir1` (= `cfg_graphqa_mimir` with the v1 weights), driver `MIMIR=v1 bash
+  scripts/graphs/run_graphqa_mimir_seeds.sh`, runs `graphqa_mimir1_*`, outputs
+  `/work/dfm/marius-ortega/dfm-hrm-graphs/graphqa_mimir1`, W&B group `graphqa-mimir1`. 87 GB, ~1 it/s, same as
+  v1.5. Started 19:06. Results: pending.
 
 ## Fixes made 2026-10-19
 
