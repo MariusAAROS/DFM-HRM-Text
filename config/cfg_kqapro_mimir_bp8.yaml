@@ -1,0 +1,11 @@
+# cfg_kqapro_mimir (Mimir v1.5) with the gradient budget of its pre-training: bp_max_steps 8 = L_bp_cycles [3, 3]
+# (gradient through every block application of H2L3), against bp 5 = [0, 3] in the other fine-tunes.
+# Tests whether the bp mismatch explains v1.5 degrading under fine-tuning (wiki: MetaQA and KQA Pro fine-tunes).
+defaults:
+  - cfg_kqapro_mimir
+  - _self_
+
+wandb_group: kqapro-mimir-bp8
+
+arch:
+  bp_max_steps: 8

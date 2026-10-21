@@ -115,6 +115,10 @@ Results from the old stack are not used for comparisons any more.
   `cfg_graphqa_mimir`, driver `scripts/graphs/run_graphqa_mimir_seeds.sh`, W&B group `graphqa-mimir`, 87 GB peak.
   DFM-Mimir v1 (`danish-foundation-models/DFM-Mimir`): same tokenizer and data, `cfg_graphqa_mimir1`,
   `MIMIR=v1 bash scripts/graphs/run_graphqa_mimir_seeds.sh`, W&B group `graphqa-mimir1`.
+- MetaQA / KQA Pro fine-tunes: configs `cfg_{metaqa,kqapro}_{hrm1b,mimir1,mimir}` (3 epochs), queue
+  `scripts/graphs/run_kgqa_finetunes.sh` via `run_hf_finetune.sh` (`EVAL_MAX_TOKENS=3200 EVAL_BATCH=16` for KQA Pro,
+  whose prompts reach ~2,900 tokens). Data `data/graphs/{metaqa,kqapro}/hrm-text-grl`; MetaQA uses GRL's regenerated
+  baseline (`data/graphs/metaqa/baseline-grl`).
 - Queues share the GPU via `flock /work/dfm/marius-ortega/dfm-hrm-graphs/locks/gpu0.lock`. Never edit a bash
   driver while a queue is running it: bash reads scripts incrementally, so the running instance can execute garbage.
 

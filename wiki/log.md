@@ -1,5 +1,7 @@
 # Knowledge Bundle Update Log
 
+- 2026-10-21: [Graph reasoning experiments](pages/graph-reasoning-experiments.md): Mimir v1 is the best fine-tune on GraphQA (clip1 0.843 +- 0.008 test, above GRL's 0.834) and on KQA Pro (0.698 vs HRM-1B 0.632), and ties HRM-1B on MetaQA (0.837). Fine-tuning degrades Mimir v1.5 on MetaQA/KQA Pro, below its own zero-shot on MetaQA; bp-budget mismatch is a hypothesis.
+
 - 2026-10-20: [Graph reasoning experiments](pages/graph-reasoning-experiments.md): renamed `eval_graphqa.py` metrics. `accuracy` is now `greedy_acc` and `tf_exact_match` is now `greedy_em`: a raw `startswith` on the greedy output, which was never teacher-forced. Added a real teacher-forced `tf_em` (GRL's metric), read off the generated token ids, which matches an independent teacher-forced pass 385/385 on HRM-1B and Mimir. Old reports fall back to the old keys.
 
 - 2026-10-20: [Graph reasoning experiments](pages/graph-reasoning-experiments.md#generation-length-bug-and-grl-test-comparison-2026-10-20): GRL's H2L3 test score (0.834, W&B `HRM-Pretrained-Recursion` `b-graphqa-H2L3`) located. Most of our ~3-point gap was `eval_graphqa.py --max_generation 32` cutting off 9 long node-list answers; raised to 96 everywhere. Greedy-generation EM is the comparison metric. Queued the DFM-Mimir-v1.5 GraphQA fine-tune (Gemma chat-format data, parity-checked import, 87 GB bench).
@@ -2910,3 +2912,4 @@ Historical journals and accepted rows are preserved during client migration.
 - 2026-10-17: Split native distribution and appearance/settings from the oversized Mimir app page; retained historical content and links.
 
 - 2026-10-17: Merged origin/main into the llama.cpp integration branch; resolved the parallel Mimir wiki splits by preserving both history links and the current integration report.
+- 2026-10-21: [Graph reasoning experiments](pages/graph-reasoning-experiments.md): Mimir v1.5 MetaQA at bp 8 (accum 2) tests 0.711 vs 0.650 at bp 5 (zero-shot 0.761); a bp 5 accum 2 control is worse than accum 1 at step 471, so the bp 8 result is confounded by accumulation.

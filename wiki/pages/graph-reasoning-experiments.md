@@ -285,7 +285,90 @@ here; v1.5 used bp 8). Confidence: high.
 - Config `cfg_graphqa_mimir1` (= `cfg_graphqa_mimir` with the v1 weights), driver `MIMIR=v1 bash
   scripts/graphs/run_graphqa_mimir_seeds.sh`, runs `graphqa_mimir1_*`, outputs
   `/work/dfm/marius-ortega/dfm-hrm-graphs/graphqa_mimir1`, W&B group `graphqa-mimir1`. 87 GB, ~1 it/s, same as
-  v1.5. Started 19:06. Results: pending.
+  v1.5. Ran 2026-10-20 19:06-22:42.
+- Results, GraphQA test `greedy_acc` at the best val epoch (385 samples):
+
+| Model, arm | s0 | s1 | s2 | mean +- sd | best val |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Mimir v1, unclipped | 0.821 (ep4) | 0.821 (ep10) | 0.836 (ep5) | 0.826 +- 0.009 | 0.855-0.860 |
+| Mimir v1, clip 1.0 | 0.852 (ep10) | 0.842 (ep7) | 0.836 (ep8) | **0.843 +- 0.008** | 0.865-0.870 |
+| HRM-Text-1B, clip 1.0 | 0.821 | 0.826 | 0.826 | 0.824 +- 0.003 | 0.855-0.857 |
+| Mimir v1.5, clip 1.0 | 0.823 | 0.808 | 0.823 | 0.818 +- 0.009 | 0.831-0.842 |
+| GRL HRM-Text-1B clip1 (`last.ckpt`) | | | | 0.834 | 0.865 |
+
+  - Mimir v1 is the best of the three. Pooled over the 6 paired runs, Mimir v1 alone gets 75 test samples right
+    against HRM-1B's 45, and 82 against v1.5's 50. Clip 1.0 is its best arm, and the only one above GRL.
+    Confidence: medium (3 seeds; paired counts are not independent across runs).
+  - Zero-shot test: v1 0.470, v1.5 0.486, HRM-1B 0.390. Pooled per task, v1 gains on NodeDegree (0.91 vs 0.86 / 0.84)
+    and EdgeCount (0.63 vs 0.57 HRM); MaximumFlow 0.16 (HRM 0.20).
+
+### MetaQA and KQA Pro fine-tunes (queued 2026-10-20)
+
+HRM-Text-1B, Mimir v1 and Mimir v1.5 on MetaQA (vanilla) and KQA Pro: seed 0, unclipped, 3 epochs, otherwise the
+GraphQA recipe. Configs `cfg_{metaqa,kqapro}_{hrm1b,mimir1,mimir}`, queue `scripts/graphs/run_kgqa_finetunes.sh`
+(through `run_hf_finetune.sh`, a copy of `run_graphqa_hrm1b.sh` with `EVAL_MAX_TOKENS`/`EVAL_BATCH`). Outputs in
+`/work/dfm/marius-ortega/dfm-hrm-graphs/<dataset>_<model>`, W&B groups `<dataset>-<model>`. Started behind the Mimir v1
+queue. Ran 2026-10-20 22:42 to 2026-10-21 05:13, no failures.
+- Results (seed 0, unclipped). Test `greedy_acc` at the best val epoch (`tf_em` in brackets), MetaQA test 1,197 and
+  KQA Pro test 1,134 samples (SE ~1.1 and ~1.4 points):
+
+| Dataset | Model | val by epoch | best ep | test | zero-shot test |
+| --- | --- | --- | ---: | ---: | ---: |
+| MetaQA | HRM-Text-1B | 0.835 0.825 0.810 | 1 | 0.836 (0.820) | 0.491 |
+| MetaQA | Mimir v1 | 0.771 0.823 0.807 | 2 | **0.837** (0.830) | 0.758 |
+| MetaQA | Mimir v1.5 | 0.643 0.662 0.619 | 2 | 0.650 (0.637) | **0.761** |
+| KQA Pro | HRM-Text-1B | 0.653 0.639 0.643 | 1 | 0.632 (0.623) | 0.285 |
+| KQA Pro | Mimir v1 | 0.699 0.666 0.668 | 1 | **0.698** (0.697) | 0.561 |
+| KQA Pro | Mimir v1.5 | 0.591 0.539 0.516 | 1 | 0.600 (0.596) | 0.481 |
+
+  - MetaQA per hop (test): HRM 0.91 / 0.85 / 0.74, Mimir v1 0.95 / 0.87 / 0.69, Mimir v1.5 0.68 / 0.67 / 0.60.
+  - KQA Pro: Mimir v1 leads HRM by 6.6 points. The largest gains are on Multihop (0.68 vs 0.43) and Logical
+    (0.72 vs 0.51).
+  - 3 epochs is too many at lr 5e-5: the best val epoch is 1-2 everywhere, and val loss rises from the first
+    half-epoch on.
+  - **Fine-tuning degrades Mimir v1.5.** On MetaQA it ends 11 points below its own zero-shot (0.650 vs 0.761). Its
+    first in-training val point (0.753 after half an epoch) is close to zero-shot, then it falls. Its val loss jumps
+    from 0.43 to 0.60 after the first half-epoch, and its train loss plateaus far above v1's (MetaQA 0.19 vs 0.04).
+    KQA Pro shows the same pattern (val loss 0.64 rising to 0.87). Mimir v1 fine-tunes well with the same data and
+    template. Confidence: high (observation).
+  - Gradient-budget mismatch, tested 2026-10-21 on MetaQA: it explains part of the drop at most. Mimir v1.5 was
+    pre-trained with `L_bp_cycles=[3, 3]` (bp 8, gradient through the L steps of both H cycles). The fine-tunes use
+    bp 5 (`[0, 3]`), which matches HRM-1B and Mimir v1's pre-training but not v1.5's.
+    - bp 8 OOMs at 8,192 tokens per microbatch. `activation_checkpointing=full` fails with a CheckpointError
+      (recomputed tensor metadata mismatch, not debugged). `gradient_accumulation_steps=2` (2 x 4,096 tokens, same
+      8,192 per step) fits at ~95 GB and runs at 1.37-1.5 s/step.
+    - Run `metaqa_mimir_bp8_s0` (config `cfg_metaqa_mimir_bp8`, accum 2, driver `scripts/graphs/run_metaqa_mimir_bp8.sh`,
+      W&B group `metaqa-mimir-bp8`). Val `greedy_acc` by epoch 0.707 / 0.613 / 0.637. Test at epoch 1: **0.711**
+      (`tf_em` 0.701), per hop 0.81 / 0.71 / 0.61. That is +6 points over bp 5 (0.650) but still 5 below zero-shot
+      (0.761) and 13 below Mimir v1 (0.837). In-training val loss: best 0.446 at step 941, then up to 0.73.
+    - Confounded by accumulation. Control `metaqa_mimir_accum2_check` (bp 5, accum 2, 500 steps, W&B group
+      `metaqa-mimir-accum-check`): val loss at step 471 is 0.682 (val exact accuracy 0.578), against 0.427 (0.753) for
+      bp 5 accum 1. Two identical bp 8 accum 2 runs (bench and `_s0`) gave 0.481 and 0.531 at that step, so the gap
+      is larger than run-to-run noise. A different microbatch size also repacks the data: step k holds different samples
+      (per-step train loss correlation with the accum 1 run: -0.03), so the "same data order" is only approximate.
+      Not yet checked: whether accum 1 and accum 2 give the same gradient on identical samples. Confidence: medium.
+  - GRL references are not row-comparable: MetaQA val 0.858 on older data, KQA Pro val 0.697 / 0.728 (clip1) on
+    prompts truncated at 2,048 tokens.
+
+- 3 epochs because GRL's HRM-Text runs peaked at epoch 3 (MetaQA val 0.858) and epoch 2 (KQA Pro 0.697 unclipped,
+  0.728 clip1), and one epoch is 8-10x a GraphQA epoch. The full 3 seeds x 2 arms would be ~40 h.
+- Data: GRL prompt (`#### Question
+` + question, `format_graphqa_to_hrm.py --keep-task`) in
+  `data/graphs/{metaqa,kqapro}/hrm-text-grl`. Sampled sets: `<d>_grl_e3` and `<d>_grl_val_e8` (HRM template),
+  `<d>_mimir_e3` and `<d>_mimir_val_e8` (Gemma chat template, shared by both Mimirs). Nothing dropped.
+
+| Dataset | Train / val / test | Tokens/epoch HRM / Mimir | Longest sample | Eval context |
+| --- | --- | --- | ---: | --- |
+| MetaQA | 7,967 / 796 / 1,197 | 7.66 M / 8.05 M | 1,389 | 1536, batch 32 |
+| KQA Pro | 6,824 / 760 / 1,134 | 8.93 M / 9.09 M | 3,012 | 3200, batch 16 |
+
+- KQA Pro baseline JSON is byte-identical to GRL's. MetaQA is not: GRL regenerated it on 2026-09-28 at 17:04
+  (adds `nanswers`, test 1,197 rows). Our older copy in `data/graphs/metaqa/baseline` (10:45 the same day) is kept for
+  the from-scratch study. These fine-tunes use GRL's current file (`data/graphs/metaqa/baseline-grl`). GRL's own
+  MetaQA run (2026-09-01) predates both versions, so its numbers are not row-comparable.
+- GRL truncated prompts to `max_seq_len` 2048 (left truncation, dropping the first facts). KQA Pro prompts reach
+  ~2,900 tokens, and we train and evaluate them in full.
+- In-training val twice per epoch (`validation_interval` 470 / 550, `validation_batches` 160 > the ~95-125 val batches).
 
 ## Fixes made 2026-10-19
 

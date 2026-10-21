@@ -1,0 +1,17 @@
+# Fine-tune of the cfg_graphqa_mimir model on KQA Pro (data/graphs/kqapro/baseline, byte-identical to GRL's), GRL prompt ("#### Question\n" + question).
+# Same recipe as cfg_graphqa_mimir except 3 epochs: GRL's runs peaked at epoch 2-3 on MetaQA / KQA Pro, and one epoch is
+# 8-10x a GraphQA epoch. In-training val twice per epoch; the val set is sampled with 8 epochs (>= one per call) and
+# needs ~95-125 batches, below validation_batches.
+# Driver: scripts/graphs/run_kgqa_finetunes.sh
+defaults:
+  - cfg_graphqa_mimir
+  - _self_
+
+wandb_group: kqapro-mimir
+
+data:
+  path: data/graphs/sampled/kqapro_mimir_e3
+  validation_path: data/graphs/sampled/kqapro_mimir_val_e8
+epochs: 3
+validation_interval: 550
+validation_batches: 160
