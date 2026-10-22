@@ -22,6 +22,9 @@ Results from the old stack are not used for comparisons any more.
   AGENTS.md's operational notes (`hrm` conda env, eval scheduler, `/work/dfm/HRM-Text`, B200) describe
   the team's production checkout, not this one.
 - Graph-experiment details and verified numbers: [`wiki/pages/graph-reasoning-experiments.md`](wiki/pages/graph-reasoning-experiments.md).
+- KG / graph pretraining corpus for Mimir (Wikidata, YAGO, KELM, T-REx, ... as data_io rows + triple stores with a
+  fixed holdout): `scripts/kg_pretrain/run_all.sh`, data in `data/kg_pretrain/`, see
+  [`wiki/pages/kg-pretraining-corpus.md`](wiki/pages/kg-pretraining-corpus.md).
 
 ## Environment
 
