@@ -1,0 +1,24 @@
+# Shared recipe. Models: configs/models/*.yaml, methods: configs/methods/*.yaml (a method's `train:` block
+# overrides these keys, e.g. the full-FT check). CLI: key=value (OmegaConf dotlist).
+seed: 0
+accelerator_type: sm120
+regime: lora              # lora | frozen | full
+lora: {rank: 16, alpha: 32}
+optimizer: adamw          # adamw | adam_atan2
+betas: [0.9, 0.999]
+lr: 2.0e-4                # LoRA (or full-FT) learning rate
+method_lr: 1.0e-3         # the method's own modules (GNN, projectors, prompt encoder)
+weight_decay: 0.0
+warmup_steps: 20          # linear warmup, then constant (as cfg_graphqa_hrm1b)
+grad_clip: 1.0
+epochs: 10
+tokens_per_step: 8192     # packed PrefixLM batch, as cfg_graphqa_hrm1b
+max_steps: null           # stop early (benchmarks / smoke tests)
+log_every: 10
+eval: {max_generation: 96, batch_size: 16, limit: null}
+data:
+  train: data/graphs/graphqa/hrm-text-grl/standard/train.jsonl
+  val: data/graphs/graphqa/hrm-text-grl/standard/val.jsonl
+  test: data/graphs/graphqa/hrm-text-grl/standard/test.jsonl
+out_root: /work/dfm/marius-ortega/dfm-hrm-graphs/graph_inject
+wandb: {project: Graph-Positional-Encoding-Exploration, group: graphqa-inject, mode: online}

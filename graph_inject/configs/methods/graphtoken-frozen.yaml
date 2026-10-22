@@ -1,0 +1,9 @@
+# GraphToken in its original setting: the LLM is frozen, only the GNN and readout train.
+name: graphtoken-frozen
+kind: graph_token
+num_tokens: 8
+gnn_hidden: 256
+gnn_layers: 3
+rwse_steps: 16
+lap_k: 8
+train: {regime: frozen}

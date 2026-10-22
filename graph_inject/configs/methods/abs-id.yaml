@@ -1,0 +1,7 @@
+# Identity control for abs-pe: random per-node vectors (consistent within a prompt), same architecture.
+name: abs-id
+kind: absolute_pe
+node_features: random
+encoder_hidden: 256
+rwse_steps: 16
+lap_k: 8

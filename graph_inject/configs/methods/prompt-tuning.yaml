@@ -1,0 +1,5 @@
+# Static soft prompt (P-Tuning, MLP reparametrization): capacity control, no graph information.
+name: prompt-tuning
+kind: prompt_tuning
+num_tokens: 8
+encoder_hidden_size: 1536

@@ -1,0 +1,4 @@
+# Hard prompting, Colorful Talks (C-OWL): WL classes as colour words after the adjacency text.
+name: text-colors
+kind: text
+encoding: colors

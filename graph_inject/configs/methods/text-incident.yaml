@@ -1,0 +1,4 @@
+# Hard prompting, Talk like a Graph incident encoding.
+name: text-incident
+kind: text
+encoding: incident

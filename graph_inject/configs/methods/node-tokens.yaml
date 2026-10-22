@@ -1,0 +1,6 @@
+# LLaGA hop-field node tokens: (hops + 1) soft tokens per node, 2-layer MLP projector, no GNN.
+name: node-tokens
+kind: node_tokens
+hops: 2
+rwse_steps: 16
+lap_k: 8

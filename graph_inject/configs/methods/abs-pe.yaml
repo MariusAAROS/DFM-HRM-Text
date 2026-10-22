@@ -1,0 +1,7 @@
+# Absolute graph PE added to every token of a node / edge (zero-init), structural node features.
+name: abs-pe
+kind: absolute_pe
+node_features: structural
+encoder_hidden: 256
+rwse_steps: 16
+lap_k: 8

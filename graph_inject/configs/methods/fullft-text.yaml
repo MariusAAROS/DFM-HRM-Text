@@ -1,0 +1,6 @@
+# Trainer check: full fine-tune with the cfg_graphqa_hrm1b recipe (+ clip 1.0); should match pretrain.py's
+# 0.82-0.84 test greedy_acc.
+name: fullft-text
+kind: text
+encoding: adjacency
+train: {regime: full, optimizer: adam_atan2, lr: 5.0e-5, weight_decay: 0.01}

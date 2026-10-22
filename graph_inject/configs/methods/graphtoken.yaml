@@ -1,0 +1,8 @@
+# GraphToken: GIN over RWSE + LapPE node features -> k graph-level soft tokens (+ LoRA = graph pooling tokens).
+name: graphtoken
+kind: graph_token
+num_tokens: 8
+gnn_hidden: 256
+gnn_layers: 3
+rwse_steps: 16
+lap_k: 8

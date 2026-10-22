@@ -22,6 +22,10 @@ Results from the old stack are not used for comparisons any more.
   AGENTS.md's operational notes (`hrm` conda env, eval scheduler, `/work/dfm/HRM-Text`, B200) describe
   the team's production checkout, not this one.
 - Graph-experiment details and verified numbers: [`wiki/pages/graph-reasoning-experiments.md`](wiki/pages/graph-reasoning-experiments.md).
+- **Graph-structure injection** (hard/soft prompting, absolute PE) on GraphQA for the three pretrained models: standalone
+  package [`graph_inject/`](graph_inject/README.md) with its own LoRA trainer (`python -m graph_inject.train model=<m>
+  method=<method>`), queue `scripts/graph_inject/run_matrix.sh`, W&B project **`Graph-Positional-Encoding-Exploration`**
+  (not HRM-Graph), see [`wiki/pages/graph-structure-injection.md`](wiki/pages/graph-structure-injection.md).
 - KG / graph pretraining corpus for Mimir (Wikidata, YAGO, KELM, T-REx, ... as data_io rows + triple stores with a
   fixed holdout): `scripts/kg_pretrain/run_all.sh`, data in `data/kg_pretrain/`, see
   [`wiki/pages/kg-pretraining-corpus.md`](wiki/pages/kg-pretraining-corpus.md).
