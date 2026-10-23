@@ -27,6 +27,7 @@ class GraphInjectedLM(nn.Module):
         self.base = base        # models.lm_head.LMHead
         self.method = method
         self.create_cache = base.create_cache
+        method.attach(base)
 
     def forward(self, carry, batch: dict[str, Tensor], **kwargs):
         batch, graph = split_graph_keys(batch)

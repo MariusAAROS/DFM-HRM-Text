@@ -11,10 +11,10 @@ import torch
 from torch_geometric.data import Data
 from torch_geometric.transforms import AddLaplacianEigenvectorPE, AddRandomWalkPE
 
-from graph_inject.structure import GraphQAGraph
+from graph_inject.structure import PromptGraph
 
 
-def _pyg_data(graph: GraphQAGraph) -> Data:
+def _pyg_data(graph: PromptGraph) -> Data:
     if graph.edges:
         edges = torch.tensor(graph.edges, dtype=torch.long).T
         edge_index = torch.cat([edges, edges.flip(0)], dim=1)
@@ -23,27 +23,33 @@ def _pyg_data(graph: GraphQAGraph) -> Data:
     return Data(edge_index=edge_index, num_nodes=graph.nnodes)
 
 
-def random_walk_pe(graph: GraphQAGraph, walk_length: int) -> np.ndarray:
+def random_walk_pe(graph: PromptGraph, walk_length: int) -> np.ndarray:
     data = AddRandomWalkPE(walk_length=walk_length, attr_name="pe")(_pyg_data(graph))
     return data.pe.numpy().astype(np.float32)
 
 
-def laplacian_pe(graph: GraphQAGraph, k: int) -> np.ndarray:
+def laplacian_pe(graph: PromptGraph, k: int) -> np.ndarray:
     """[nnodes, k]; graphs with fewer than k + 1 nodes are zero-padded."""
     out = np.zeros((graph.nnodes, k), dtype=np.float32)
     k_eff = min(k, graph.nnodes - 1)
     if k_eff > 0:
-        data = AddLaplacianEigenvectorPE(k=k_eff, attr_name="pe", is_undirected=True)(_pyg_data(graph))
+        transform = AddLaplacianEigenvectorPE(k=k_eff, attr_name="pe", is_undirected=True)
+        # PyG's dense eigh at every size: its sparse ARPACK path (>= 100 nodes, KG prompts) starts from a random
+        # vector and fails to converge on some disconnected graphs. Below 100 nodes this is PyG's default path.
+        transform.SPARSE_THRESHOLD = 1 << 30
+        data = transform(_pyg_data(graph))
         out[:, :k_eff] = data.pe.numpy()
     return out
 
 
-def structural_features(graph: GraphQAGraph, walk_length: int = 16, lap_k: int = 8) -> np.ndarray:
+def structural_features(graph: PromptGraph, walk_length: int = 16, lap_k: int = 8) -> np.ndarray:
     """[nnodes, walk_length + lap_k]: RWSE followed by LapPE (the LapPE block is sign-flipped in training)."""
+    if graph.nnodes == 0:  # KQA Pro prompts without facts
+        return np.zeros((0, walk_length + lap_k), dtype=np.float32)
     return np.concatenate([random_walk_pe(graph, walk_length), laplacian_pe(graph, lap_k)], axis=1)
 
 
-def normalized_adjacency(graph: GraphQAGraph) -> np.ndarray:
+def normalized_adjacency(graph: PromptGraph) -> np.ndarray:
     adj = np.zeros((graph.nnodes, graph.nnodes), dtype=np.float32)
     for u, v in graph.edges:
         adj[u, v] = adj[v, u] = 1.0

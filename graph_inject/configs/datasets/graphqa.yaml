@@ -1,0 +1,9 @@
+# GraphQA (GRL prompt, #### Question): 10 epochs, the phase-1 recipe.
+dataset: graphqa
+epochs: 10
+data:
+  train: data/graphs/graphqa/hrm-text-grl/standard/train.jsonl
+  val: data/graphs/graphqa/hrm-text-grl/standard/val.jsonl
+  test: data/graphs/graphqa/hrm-text-grl/standard/test.jsonl
+out_root: /work/dfm/marius-ortega/dfm-hrm-graphs/graph_inject
+wandb: {group: graphqa-inject}

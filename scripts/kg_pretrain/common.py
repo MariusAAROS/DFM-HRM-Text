@@ -1,4 +1,4 @@
-"""Shared pieces of the KG pretraining corpus pipeline (see wiki/pages/kg-pretraining-corpus.md).
+"""Shared pieces of the KG pretraining corpus pipeline (see wiki/pages/hrm-graph/kg-pretraining-corpus.md).
 
 Layout under data/kg_pretrain/:
     raw/<source>/                 downloads + SOURCE.json (fetch.sh)

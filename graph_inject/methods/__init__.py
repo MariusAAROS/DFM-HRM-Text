@@ -4,6 +4,7 @@ from graph_inject.methods.base import GraphMethod
 from graph_inject.methods.graph_token import GraphTokenMethod
 from graph_inject.methods.node_tokens import NodeTokensMethod
 from graph_inject.methods.prompt_tuning import PromptTuningMethod
+from graph_inject.methods.relative_bias import RelativeBiasMethod
 from graph_inject.methods.text import TextMethod
 
 METHODS: dict[str, type[GraphMethod]] = {
@@ -12,6 +13,7 @@ METHODS: dict[str, type[GraphMethod]] = {
     "graph_token": GraphTokenMethod,
     "node_tokens": NodeTokensMethod,
     "absolute_pe": AbsolutePEMethod,
+    "relative_bias": RelativeBiasMethod,
 }
 
 

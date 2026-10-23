@@ -1,6 +1,6 @@
 """Results table of graph_inject runs: test greedy_acc (overall, without MaximumFlow, per task) at the best val epoch.
 
-    .venv/bin/python -m graph_inject.summarize [--root /work/dfm/marius-ortega/dfm-hrm-graphs/graph_inject]
+    .venv/bin/python -m graph_inject.summarize [--dataset graphqa | metaqa | kqapro] [--root <out_root>] [--per_task]
 """
 import argparse
 import glob
@@ -14,9 +14,11 @@ from omegaconf import OmegaConf
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--root", default=OmegaConf.load(os.path.join(CONFIG_DIR, "base.yaml")).out_root)
+    ap.add_argument("--dataset", default="graphqa")
+    ap.add_argument("--root", help="default: the dataset's out_root")
     ap.add_argument("--per_task", action="store_true")
     args = ap.parse_args()
+    args.root = args.root or OmegaConf.load(os.path.join(CONFIG_DIR, "datasets", f"{args.dataset}.yaml")).out_root
 
     runs = defaultdict(dict)  # method -> model -> [reports over seeds]
     for path in sorted(glob.glob(os.path.join(args.root, "*", "*_s*", "eval_test.json"))):

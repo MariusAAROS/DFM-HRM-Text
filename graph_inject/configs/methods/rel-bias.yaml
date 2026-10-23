@@ -1,0 +1,4 @@
+# Relative attention bias (phase 2): learned beta[layer, head, Levi-graph distance bucket] on graph-element pairs.
+name: rel-bias
+kind: relative_bias
+buckets: distance

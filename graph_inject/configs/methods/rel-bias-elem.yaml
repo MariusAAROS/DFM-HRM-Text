@@ -1,0 +1,4 @@
+# Identity control for rel-bias: beta[layer, head, same element / other element], no graph distances.
+name: rel-bias-elem
+kind: relative_bias
+buckets: element

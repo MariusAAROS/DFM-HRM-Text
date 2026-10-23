@@ -1,8 +1,6 @@
 # Operational Knowledge and Plans
 
-* [Graph Reasoning Experiments](graph-reasoning-experiments.md) - GraphQA/KGQA recursion study ported from HRM-Text-for-Graphs: tokenization parity, SM120 attention, configs, smoke runs, HRM-Text-1B fine-tune vs GRL.
-* [Graph-Structure Injection on GraphQA](graph-structure-injection.md) - graph_inject: hard/soft/embedding-level graph injection methods for HRM-Text-1B and Mimir under one LoRA trainer; verification, run matrix, results.
-* [KG / Graph Pretraining Corpus](kg-pretraining-corpus.md) - Tier 1+2 KG and graph-reasoning corpora for Mimir pretraining: sources, triple store with holdout, data_io rows, 6.8B Gemma tokens, verification.
+* [HRM-Graph](hrm-graph/) - Graph-reasoning work in this fork: recursion-depth study and pretrained fine-tunes, graph-structure injection, KG pretraining corpus.
 
 * [XL Andersen Evaluation Backfill](andersen-xl-evaluation-backfill.md) - Main-line checkpoint inventory and missing validation-split prerequisites.
 * [Cooperative CUDA Suspension](cooperative-cuda-suspension.md) - Isolated prototype, atomic-file handshake, recovery controller and parity evidence.

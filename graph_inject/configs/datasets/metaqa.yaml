@@ -1,0 +1,12 @@
+# MetaQA (GRL gold subgraphs, ~72 facts per prompt): 3 epochs, as cfg_metaqa_hrm1b (full FT peaked at epoch 1-2).
+dataset: metaqa
+epochs: 3
+# Best-epoch selection on a fixed, task-stratified 400-sample val subset (seed 0, same for every run and epoch):
+# about 0.8 s of generation per sample, so full val would cost ~16 min per epoch. Test is always complete.
+eval: {val_subset: 400}
+data:
+  train: data/graphs/metaqa/hrm-text-grl/standard/train.jsonl
+  val: data/graphs/metaqa/hrm-text-grl/standard/val.jsonl
+  test: data/graphs/metaqa/hrm-text-grl/standard/test.jsonl
+out_root: /work/dfm/marius-ortega/dfm-hrm-graphs/graph_inject_metaqa
+wandb: {group: metaqa-inject}

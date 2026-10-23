@@ -1,0 +1,13 @@
+# KQA Pro (GRL gold subgraphs with qualifiers, prompts up to ~3,000 tokens): 3 epochs, as cfg_kqapro_hrm1b.
+# Eval batch 8: the KV cache (8 H/L applications x 16 layers) at ~4,000 tokens (text-colors) would not fit at 16.
+dataset: kqapro
+epochs: 3
+# Best-epoch selection on a fixed, task-stratified 400-sample val subset (seed 0, same for every run and epoch);
+# test is always complete.
+eval: {batch_size: 8, val_subset: 400}
+data:
+  train: data/graphs/kqapro/hrm-text-grl/standard/train.jsonl
+  val: data/graphs/kqapro/hrm-text-grl/standard/val.jsonl
+  test: data/graphs/kqapro/hrm-text-grl/standard/test.jsonl
+out_root: /work/dfm/marius-ortega/dfm-hrm-graphs/graph_inject_kqapro
+wandb: {group: kqapro-inject}

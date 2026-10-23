@@ -9,9 +9,17 @@
              labels, min-max normalized to a hue in [0, 180] degrees and named, listed in a <<COLORS>> block after
              the adjacency text. No public code: the template follows the paper's Figure 3; the colour-name
              list is ours (hue-ordered names over 0-180 degrees).
+
+Knowledge graphs (MetaQA, KQA Pro; graph.node_names is set):
+  incident   no KG encoder exists in Talk like a Graph; ours groups the facts by subject, in order of first
+             appearance, merging the objects of one relation (outgoing edges only, the graph is directed):
+             "Santa Sangre: written by Claudio Argento, Roberto Leoni; has tags circus." Qualifiers stay in
+             brackets after their object.
+  colors     the same C-OWL block with entity names for node ids, 1-WL on the undirected entity graph
+             (relation labels ignored, as in the paper).
 """
 from graph_inject.methods.base import GraphMethod, GraphQASample
-from graph_inject.structure import GraphQAGraph, wl_labels
+from graph_inject.structure import PromptGraph, wl_labels
 
 # Hue-ordered colour names from red (0 deg) to cyan (180 deg).
 HUE_COLORS = ("red", "scarlet", "vermilion", "orange", "amber", "gold", "yellow", "lime", "chartreuse",
@@ -22,7 +30,7 @@ def create_node_string(nnodes: int) -> str:
     return "".join(f"{i}, " for i in range(nnodes - 1)) + f"and {nnodes - 1}"
 
 
-def incident_encoder(graph: GraphQAGraph) -> str:
+def incident_encoder(graph: PromptGraph) -> str:
     output = "G describes a graph among nodes %s.\n" % create_node_string(graph.nnodes)
     if graph.edges:
         output += "In this graph:\n"
@@ -36,12 +44,39 @@ def incident_encoder(graph: GraphQAGraph) -> str:
     return output
 
 
-def color_block(graph: GraphQAGraph) -> str:
+KG_INCIDENT_PREAMBLE = (
+    "In a knowledge graph, the facts are grouped by entity: \"s: p o1, o2; q o3.\" means that entity s is linked "
+    "to entities o1 and o2 by relation p, and to entity o3 by relation q.\n")
+KG_INCIDENT_ATTRIBUTES = " A relation may also be an attribute of s, with value o. Facts may carry qualifiers, given in brackets."
+
+
+def kg_incident_encoder(graph: PromptGraph, preamble: str) -> str:
+    by_subject: dict[str, dict[str, list[str]]] = {}
+    for f in graph.facts:
+        obj = f.obj + (f" [{'; '.join(f'{k}: {v}' for k, v in f.qualifiers)}]" if f.qualifiers else "")
+        objs = by_subject.setdefault(f.subject, {}).setdefault(f.relation, [])
+        if obj not in objs:  # GRL's subgraphs repeat some facts
+            objs.append(obj)
+    pre = KG_INCIDENT_PREAMBLE
+    if "attribute" in preamble:  # KQA Pro
+        pre = pre[:-1] + KG_INCIDENT_ATTRIBUTES + "\n"
+    lines = [f"{s}: " + "; ".join(f"{p} {', '.join(objs)}" for p, objs in rels.items()) + "."
+             for s, rels in by_subject.items()]
+    return pre + "The facts are:\n" + "".join(line + "\n" for line in lines)
+
+
+def color_block(graph: PromptGraph) -> str:
     labels = wl_labels(graph.nnodes, graph.edges)
+    if not labels:  # KQA Pro prompts without facts
+        return ""
     lo, hi = min(labels), max(labels)
     names = [HUE_COLORS[round((lab - lo) / (hi - lo) * (len(HUE_COLORS) - 1)) if hi > lo else 0] for lab in labels]
-    pairs = ", ".join(f"Color({v}):{c}" for v, c in enumerate(names))
-    return ("Colors are given the template: Color(i):c, meaning that node i has color c.\n"
+    if graph.node_names is None:
+        pairs = ", ".join(f"Color({v}):{c}" for v, c in enumerate(names))
+        return ("Colors are given the template: Color(i):c, meaning that node i has color c.\n"
+                f"<<COLORS>>\n{pairs}.\n")
+    pairs = ", ".join(f"Color({e}):{c}" for e, c in zip(graph.node_names, names))
+    return ("Colors are given the template: Color(e):c, meaning that entity e has color c.\n"
             f"<<COLORS>>\n{pairs}.\n")
 
 
@@ -52,6 +87,8 @@ class TextMethod(GraphMethod):
         start, end = g.description_span
         if enc == "adjacency":
             return text
+        if enc == "incident" and g.node_names is not None:
+            return text[:start] + kg_incident_encoder(g, text[start:end]) + text[end:]
         if enc == "incident":
             return text[:start] + incident_encoder(g) + text[end:]
         if enc == "colors":

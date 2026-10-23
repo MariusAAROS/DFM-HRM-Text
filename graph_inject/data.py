@@ -1,4 +1,4 @@
-"""GraphQA samples -> encoded prompts -> packed PrefixLM training batches (same layout as dataset_new.V1Dataset).
+"""GraphQA / MetaQA / KQA Pro samples -> encoded prompts -> packed PrefixLM training batches (same layout as dataset_new.V1Dataset).
 
 Unlike the data_io pipeline, tokenization happens here (once per split), because methods may rewrite the
 prompt, insert soft-token slots, or need the token -> graph-element alignment. The ids are identical to
@@ -11,7 +11,8 @@ import numpy as np
 import torch
 
 from graph_inject.methods.base import CollateItem, GraphMethod, GraphQASample
-from graph_inject.structure import parse_graphqa
+from graph_inject.kg_structure import parse_kg_facts
+from graph_inject.structure import PromptGraph, parse_graphqa
 from graph_inject.tokenize import EncodedPrompt, PromptTokenizer
 from models.common import IGNORE_LABEL_ID, wrap_tensor, prepare_prefixlm_batch
 from models.flash_attention_prefixlm_v2 import compute_aux_seq_tensors_scalars
@@ -30,12 +31,34 @@ class EncodedSample:
         return len(self.prompt.ids) + len(self.response_ids) - 1
 
 
-def load_samples(path: str) -> list[GraphQASample]:
+def parse_graph(text: str, dataset: str) -> PromptGraph:
+    return parse_graphqa(text) if dataset == "graphqa" else parse_kg_facts(text, dataset)
+
+
+def load_samples(path: str, dataset: str = "graphqa", limit: int | None = None) -> list[GraphQASample]:
     with open(path, encoding="utf-8") as f:
-        rows = [json.loads(line) for line in f if line.strip()]
+        rows = [json.loads(line) for line in f if line.strip()][:limit]
     return [GraphQASample(idx=i, condition=r.get("condition", "direct"), instruction=r["instruction"],
-                          response=r["response"], task=r.get("task", ""), graph=parse_graphqa(r["instruction"]))
+                          response=r["response"], task=r.get("task", ""), graph=parse_graph(r["instruction"], dataset))
             for i, r in enumerate(rows)]
+
+
+def stratified_subset(samples: list, n: int, seed: int = 0) -> list:
+    """n samples drawn without replacement, per task in proportion to the task's share (largest remainders), in
+    their original order. The seed is fixed, not the run's: every run and every epoch scores the same subset."""
+    if n >= len(samples):
+        return samples
+    by_task: dict[str, list[int]] = {}
+    for i, s in enumerate(samples):
+        by_task.setdefault(s.sample.task, []).append(i)
+    tasks = sorted(by_task)
+    quota = {t: n * len(by_task[t]) / len(samples) for t in tasks}
+    take = {t: int(quota[t]) for t in tasks}
+    for t in sorted(tasks, key=lambda t: quota[t] - take[t], reverse=True)[:n - sum(take.values())]:
+        take[t] += 1
+    rng = np.random.default_rng(seed)
+    keep = sorted(i for t in tasks for i in rng.permutation(by_task[t])[:take[t]])
+    return [samples[i] for i in keep]
 
 
 def encode_samples(samples: list[GraphQASample], method: GraphMethod, tokenizer: PromptTokenizer) -> list[EncodedSample]:
@@ -85,7 +108,8 @@ def train_batch(samples: list[EncodedSample], method: GraphMethod, max_tokens: i
         position_ids += [np.arange(len(inst)), np.arange(len(inst), len(inst) + len(resp) - 1)]
         prefix_lens.append(len(inst))
         causal_lens.append(len(resp) - 1)
-        items.append(CollateItem(sample=s.sample, features=s.features, prompt=s.prompt, offset=offset))
+        items.append(CollateItem(sample=s.sample, features=s.features, prompt=s.prompt, offset=offset,
+                                 length=len(inst) + len(resp) - 1))
         offset += len(inst) + len(resp) - 1
     batch = {k: np.concatenate(v).astype(np.int32) for k, v in
              (("inputs", inputs), ("labels", labels), ("position_ids", position_ids))}

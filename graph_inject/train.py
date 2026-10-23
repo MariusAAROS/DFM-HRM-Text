@@ -1,8 +1,9 @@
-"""Fine-tune a pretrained HRM-Text model on GraphQA with one graph-injection method, then evaluate.
+"""Fine-tune a pretrained HRM-Text model on GraphQA / MetaQA / KQA Pro with one graph-injection method, then evaluate.
 
-    .venv/bin/python -m graph_inject.train model=hrm1b method=graph_token [key=value ...]
+    .venv/bin/python -m graph_inject.train [dataset=graphqa] model=hrm1b method=graphtoken [key=value ...]
 
-Configs: graph_inject/configs/base.yaml <- configs/models/<model>.yaml <- configs/methods/<method>.yaml <- CLI.
+Configs: graph_inject/configs/base.yaml <- configs/datasets/<dataset>.yaml <- configs/models/<model>.yaml
+<- configs/methods/<method>.yaml <- CLI.
 Single GPU, no FSDP, no torch.compile. The base model is loaded from the converted HF dir with
 simple_inference_engine.inference_load_checkpoint (bf16). Regimes:
 
@@ -11,7 +12,8 @@ simple_inference_engine.inference_load_checkpoint (bf16). Regimes:
   full    every weight trains: fp32 params under bf16 autocast (trainer check against pretrain.py)
 
 Every epoch: greedy generation on val (eval_graphqa metrics). The best epoch by val tf_em (ties: earliest,
-as scripts/graphs/run_graphqa_hrm1b.sh) is evaluated on test. Outputs in <out_root>/<model>/<method>_s<seed>/:
+as scripts/graphs/run_graphqa_hrm1b.sh) is evaluated on test. Outputs in <out_root>/<model>/<method>_s<seed>/
+(one out_root per dataset):
 config.yaml, eval_val_ep<N>.json, eval_test.json, best_trainable.pt (trainable params only).
 """
 import json
@@ -26,7 +28,8 @@ import torch
 import wandb
 from omegaconf import OmegaConf
 
-from graph_inject.data import EncodedSample, encode_samples, load_samples, pack_batches, to_device_prefixlm, train_batch
+from graph_inject.data import (EncodedSample, encode_samples, load_samples, pack_batches, stratified_subset,
+                               to_device_prefixlm, train_batch)
 from graph_inject.generate import generate, score
 from graph_inject.lora import apply_lora
 from graph_inject.methods import build_method
@@ -42,6 +45,7 @@ CONFIG_DIR = os.path.join(os.path.dirname(__file__), "configs")
 def load_config(argv: list[str]):
     cli = OmegaConf.from_dotlist(argv)
     cfg = OmegaConf.load(os.path.join(CONFIG_DIR, "base.yaml"))
+    cfg = OmegaConf.merge(cfg, OmegaConf.load(os.path.join(CONFIG_DIR, "datasets", f"{cli.pop('dataset', 'graphqa')}.yaml")))
     cfg.model = OmegaConf.load(os.path.join(CONFIG_DIR, "models", f"{cli.pop('model')}.yaml"))
     method_cfg = OmegaConf.load(os.path.join(CONFIG_DIR, "methods", f"{cli.pop('method')}.yaml"))
     cfg = OmegaConf.merge(cfg, method_cfg.pop("train", {}), {"method": method_cfg}, cli)
@@ -104,6 +108,8 @@ def log_eval(prefix: str, report: dict, step: int):
 def main(argv: list[str]):
     cfg = load_config(argv)
     run_name = f"{cfg.model.name}-{cfg.method.name}-s{cfg.seed}"
+    if cfg.dataset != "graphqa":  # the GraphQA phase-1 names stay as they were
+        run_name = f"{cfg.dataset}-{run_name}"
     out_dir = os.path.join(cfg.out_root, cfg.model.name, f"{cfg.method.name}_s{cfg.seed}")
     os.makedirs(out_dir, exist_ok=True)
     OmegaConf.save(cfg, os.path.join(out_dir, "config.yaml"))
@@ -122,7 +128,10 @@ def main(argv: list[str]):
 
     tokenizer = PromptTokenizer(ckpt)
     t0 = time.time()
-    splits = {k: encode_samples(load_samples(cfg.data[k]), model.method, tokenizer) for k in ("train", "val", "test")}
+    splits = {k: encode_samples(load_samples(cfg.data[k], cfg.dataset, cfg.data.limit), model.method, tokenizer)
+              for k in ("train", "val", "test")}
+    if cfg.eval.val_subset:  # epoch selection on a fixed, task-stratified val subset; test stays complete
+        splits["val"] = stratified_subset(splits["val"], cfg.eval.val_subset)
     if cfg.eval.limit:
         splits["val"], splits["test"] = splits["val"][:cfg.eval.limit], splits["test"][:cfg.eval.limit]
     print(f"encoded splits in {time.time() - t0:.0f}s: " + ", ".join(
@@ -130,7 +139,7 @@ def main(argv: list[str]):
 
     optimizer = build_optimizer(cfg, model)
     wandb.init(project=cfg.wandb.project, group=cfg.wandb.group, name=run_name, job_type="train",
-               tags=[cfg.model.name, cfg.method.name, cfg.regime], mode=cfg.wandb.mode,
+               tags=[cfg.dataset, cfg.model.name, cfg.method.name, cfg.regime], mode=cfg.wandb.mode,
                config=OmegaConf.to_container(cfg, resolve=True) | {"trainable_params": n_trainable,
                                                                     "method_params": n_method})
 

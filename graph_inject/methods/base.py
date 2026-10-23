@@ -8,6 +8,7 @@ A method touches the pipeline at four points:
   collate(items, rng)          per-batch tensors, keys prefixed "graph_"; rng is None at eval (deterministic)
   inject(embeddings, graph)    on GPU, between the token embedding and the HRM: overwrite soft slots
                                and/or add per-token vectors
+  attach(base)                 once, with the base LMHead (default: nothing): e.g. install attention hooks
 
 Positions in the graph batch index the *flattened* token sequence: [T] in a packed training batch,
 [1 * L] at a single-prompt prefill, so inject works on embeddings.reshape(-1, D) in both cases.
@@ -19,7 +20,7 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 
-from graph_inject.structure import GraphQAGraph, NO_ELEMENT
+from graph_inject.structure import NO_ELEMENT, PromptGraph
 from graph_inject.tokenize import EncodedPrompt
 
 
@@ -30,7 +31,7 @@ class GraphQASample:
     instruction: str
     response: str
     task: str
-    graph: GraphQAGraph
+    graph: PromptGraph
 
 
 @dataclass
@@ -39,6 +40,7 @@ class CollateItem:
     features: dict[str, np.ndarray]
     prompt: EncodedPrompt
     offset: int  # position of the prompt's first token in the flattened batch
+    length: int = 0  # tokens of this sample in the batch (prompt + response - 1 in training); 0: the prompt only
 
 
 class GraphMethod(nn.Module):
@@ -52,6 +54,9 @@ class GraphMethod(nn.Module):
 
     def setup(self, tokenizer, embed_tokens: nn.Module) -> None:
         """Optional access to the tokenizer and (frozen) token embedding, once, before training."""
+
+    def attach(self, base: nn.Module) -> None:
+        """Optional access to the base model, once, when GraphInjectedLM wraps it."""
 
     def rewrite_prompt(self, sample: GraphQASample) -> str:
         return sample.instruction
@@ -106,6 +111,11 @@ def stack_node_features(items: list[CollateItem], key: str, rng: np.random.Gener
             x[:, sign_flip_cols] *= rng.choice([-1.0, 1.0], size=n_cols).astype(np.float32)
         feats.append(x)
     return torch.from_numpy(np.concatenate(feats))
+
+
+def node_offsets(items: list[CollateItem]) -> np.ndarray:
+    """Index of each graph's first node in the batch-concatenated node arrays."""
+    return np.cumsum([0] + [it.sample.graph.nnodes for it in items[:-1]])
 
 
 def batched_edge_index(items: list[CollateItem]) -> tuple[Tensor, Tensor]:

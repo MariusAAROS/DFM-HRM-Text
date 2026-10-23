@@ -1,5 +1,5 @@
 #!/bin/bash
-# Full KG pretraining corpus pipeline, in dependency order (see wiki/pages/kg-pretraining-corpus.md).
+# Full KG pretraining corpus pipeline, in dependency order (see wiki/pages/hrm-graph/kg-pretraining-corpus.md).
 #
 #   STEPS="fetch small wikidata5m yago wikidata relabel trex kelm graphqa decontam verify stats smoke" (default: all)
 #   setsid nohup bash scripts/kg_pretrain/run_all.sh > data/kg_pretrain/logs/run_all.log 2>&1 < /dev/null &

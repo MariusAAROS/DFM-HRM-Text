@@ -1,9 +1,12 @@
 #!/bin/bash
-# Graph-structure injection on GraphQA: every method (graph_inject/configs/methods) x model (hrm1b mimir1 mimir)
-# x seed, each through `python -m graph_inject.train` (train, val generation per epoch, test at the best val epoch).
-# Runs with an eval_test.json are skipped, so a rerun resumes at the first unfinished run. W&B group graphqa-inject.
+# Graph-structure injection: every method (graph_inject/configs/methods) x dataset (graphqa metaqa kqapro) x model
+# (hrm1b mimir1 mimir) x seed, each through `python -m graph_inject.train` (train, val generation per epoch, test at
+# the best val epoch). Runs with an eval_test.json in the dataset's out_root are skipped, so a rerun resumes at the
+# first unfinished run. W&B project Graph-Positional-Encoding-Exploration, group <dataset>-inject.
 #
-#   MODELS="hrm1b mimir1 mimir" METHODS="text abs-pe" SEEDS="0 1 2" OVERRIDES="epochs=5"
+#   DATASETS="metaqa kqapro" MODELS="hrm1b mimir1 mimir" METHODS="text abs-pe" SEEDS="0 1 2" OVERRIDES="epochs=5"
+#
+# Order: seed, method, dataset, model, so the first methods finish on every dataset first.
 #
 # Detached from the shell / SSH session, behind any other job holding the GPU lock:
 #   setsid nohup flock /work/dfm/marius-ortega/dfm-hrm-graphs/locks/gpu0.lock bash scripts/graph_inject/run_matrix.sh \
@@ -13,19 +16,23 @@
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 export PATH="$PWD/.venv/bin:$PATH" OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
-ROOT=/work/dfm/marius-ortega/dfm-hrm-graphs/graph_inject
-METHODS=${METHODS:-text fullft-text text-incident text-colors prompt-tuning graphtoken graphtoken-frozen node-tokens abs-pe abs-id}
-mkdir -p "$ROOT/logs"
+METHODS=${METHODS:-text abs-pe abs-id rel-bias rel-bias-elem node-tokens graphtoken prompt-tuning text-incident text-colors graphtoken-frozen fullft-text}
+DATASETS=${DATASETS:-metaqa kqapro graphqa}
+out_root() { python -c "from omegaconf import OmegaConf; print(OmegaConf.load('graph_inject/configs/datasets/$1.yaml').out_root)"; }
 for S in ${SEEDS:-0}; do
   for METHOD in $METHODS; do
-    for M in ${MODELS:-hrm1b mimir1 mimir}; do
-      RUN=${M}-${METHOD}-s$S
-      if [[ -f $ROOT/$M/${METHOD}_s$S/eval_test.json ]]; then echo "skip $RUN (done)"; continue; fi
-      echo "=== $(date '+%F %T') $RUN"
-      python -m graph_inject.train model=$M method=$METHOD seed=$S out_root=$ROOT ${OVERRIDES:-} \
-        > "$ROOT/logs/$RUN.log" 2>&1 || echo "FAILED: $RUN (see $ROOT/logs/$RUN.log)"
+    for D in $DATASETS; do
+      ROOT=$(out_root "$D")
+      mkdir -p "$ROOT/logs"
+      for M in ${MODELS:-hrm1b mimir1 mimir}; do
+        RUN=${D}-${M}-${METHOD}-s$S
+        if [[ -f $ROOT/$M/${METHOD}_s$S/eval_test.json ]]; then echo "skip $RUN (done)"; continue; fi
+        echo "=== $(date '+%F %T') $RUN"
+        python -m graph_inject.train dataset=$D model=$M method=$METHOD seed=$S ${OVERRIDES:-} \
+          > "$ROOT/logs/$RUN.log" 2>&1 || echo "FAILED: $RUN (see $ROOT/logs/$RUN.log)"
+      done
     done
   done
 done
 echo "=== $(date '+%F %T') done"
-python -m graph_inject.summarize --root "$ROOT"
+for D in $DATASETS; do echo "## $D"; python -m graph_inject.summarize --dataset "$D"; done

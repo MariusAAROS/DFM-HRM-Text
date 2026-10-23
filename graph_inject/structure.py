@@ -1,5 +1,8 @@
 """Graph structure recovered from GraphQA prompt text, and the graph element of every character.
 
+PromptGraph is shared by every dataset; the knowledge-graph prompts (MetaQA, KQA Pro) are parsed into it by
+kg_structure.py.
+
 Ported from Graph-Representation-Learning-for-LLM, branch graph-enc (commit a3d3418,
 src/datasets/graphqa/structure.py): the regexes and wl_labels are unchanged; the single-graph parser
 additionally records the character span of every edge tuple and of the graph description.
@@ -32,13 +35,15 @@ NO_ELEMENT = -1
 
 
 @dataclass
-class GraphQAGraph:
+class PromptGraph:
     nnodes: int
     edges: list[tuple[int, int]]
     node_spans: list[tuple[int, int, int]]   # (char_start, char_end, node)
     edge_spans: list[tuple[int, int, int]]   # (char_start, char_end, edge index), the whole "(u, v)" tuple
     description_span: tuple[int, int]        # from "In an undirected graph" to the end of the edge line
     question_start: int                      # start of the "Q:" line
+    node_names: list[str] | None = None      # knowledge graphs: entity / value name of every node (None: GraphQA)
+    facts: list | None = None                # knowledge graphs: kg_structure.KGFact per fact line
 
     @property
     def nelements(self) -> int:
@@ -60,7 +65,10 @@ class GraphQAGraph:
         return elem
 
 
-def parse_graphqa(text: str) -> GraphQAGraph:
+GraphQAGraph = PromptGraph
+
+
+def parse_graphqa(text: str) -> PromptGraph:
     """Parse the single graph of a GraphQA prompt."""
     header = GRAPH_HEADER.search(text)
     if header is None:
@@ -88,7 +96,7 @@ def parse_graphqa(text: str) -> GraphQAGraph:
     bad = [v for _, _, v in node_spans if v >= nnodes]
     if bad:
         raise ValueError(f"node ids {bad} exceed the {nnodes}-node list")
-    return GraphQAGraph(nnodes=nnodes, edges=edges, node_spans=node_spans, edge_spans=edge_spans,
+    return PromptGraph(nnodes=nnodes, edges=edges, node_spans=node_spans, edge_spans=edge_spans,
                         description_span=(header.start(), q_line.start()), question_start=q_line.start())
 
 
