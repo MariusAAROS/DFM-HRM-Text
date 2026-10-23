@@ -3,7 +3,7 @@ type: Runbook
 title: Graph-Structure Injection on GraphQA (graph_inject)
 description: Standalone package that fine-tunes HRM-Text-1B, DFM-Mimir v1 and v1.5 on GraphQA with hard-prompt, soft-prompt and embedding-level graph-injection methods under one LoRA trainer; design, verification, run matrix and results.
 tags: [graphs, graphqa, lora, soft-prompts, positional-encoding, hrm-text-1b, mimir]
-status: in-progress
+status: stable
 last_updated: 2026-10-22
 confidence: high
 ---
@@ -86,6 +86,48 @@ The relative attention bias (GTLM / Graphormer) is phase 2: the SM120 FA2 varlen
 - Prior result: GRL `graph-enc` gated node and WL embeddings under full FT gave no gain (0.901 vs 0.897, control
   0.896). The gate stayed at about 0.002.
 
-## Results
+## Results, phase 1 (seed 0, 2026-10-22/23)
 
-Pending: the run matrix has not been queued yet.
+Ran 2026-10-22 17:12 to 2026-10-23 09:40: 30 runs, about 33 min each. The table gives GraphQA test `greedy_acc`
+(385 samples) at the best val `tf_em` epoch. One sample is 0.26 points, and the binomial SE is about 1.9 points.
+The mean column also gives the mean without MaximumFlow. Δ is the pooled paired difference against `text` over
+the 3 models (samples won / lost, exact McNemar p-value).
+
+| Method | HRM-1B | Mimir v1 | Mimir v1.5 | Mean (w/o MaxFlow) | Pooled vs `text` |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `text` (LoRA, no graph module) | 0.829 | **0.857** | 0.842 | **0.842** (0.909) | reference |
+| `text-colors` | 0.831 | 0.855 | 0.847 | **0.844** (0.906) | +24 / -22, p=0.88 |
+| `node-tokens` | 0.821 | 0.849 | **0.855** | **0.842** (0.905) | +23 / -24, p=1.00 |
+| `abs-id` (control) | 0.826 | 0.836 | **0.855** | 0.839 (0.901) | +24 / -28, p=0.68 |
+| `fullft-text` | **0.847** | 0.839 | 0.829 | 0.838 (0.900) | +29 / -34, p=0.62 |
+| `text-incident` | 0.834 | 0.842 | 0.831 | 0.835 (0.896) | +25 / -33, p=0.36 |
+| `graphtoken` | 0.813 | 0.849 | 0.844 | 0.835 (0.901) | +20 / -28, p=0.31 |
+| `abs-pe` | 0.813 | 0.836 | 0.852 | 0.834 (0.898) | +19 / -29, p=0.19 |
+| `prompt-tuning` (control) | 0.810 | 0.831 | 0.842 | 0.828 (0.893) | +19 / -36, p=0.03 |
+| `graphtoken-frozen` | 0.709 | 0.787 | 0.805 | 0.767 (0.830) | +16 / -103, p<0.001 |
+
+- **No injection method beats the no-PE `text` baseline.** Every LoRA method is within about 2 points of it, both
+  per model and on average. All pooled paired tests are non-significant, except two losses: frozen GraphToken
+  (-7.5 points) and prompt tuning (-1.4 points, p=0.03).
+- **`abs-pe` vs its identity control `abs-id`:** 23 wins and 29 losses pooled (p=0.49), so structure adds
+  nothing over node identity.
+- **φ is used; it just does not help.** At the best epoch, the RMS of φ on node tokens is 0.30 (HRM-1B),
+  0.25 (Mimir v1) and 0.17 (Mimir v1.5), against a token-embedding RMS of 1.02, 0.99 and 0.43. That is unlike
+  GRL `graph-enc`, whose gate stayed at about 0.002. `abs-id` learns a larger φ than `abs-pe` on HRM-1B
+  (0.78 vs 0.30).
+- **Freezing the LLM costs 4-12 points.** GraphToken needs the LLM adapted, as in the graph pooling tokens paper.
+- **The trainer check passes.** `fullft-text` reaches 0.847 / 0.839 / 0.829, against `pretrain.py` clip-1.0 runs
+  of 0.824 / 0.843 / 0.818. LoRA `text` is as good as full FT on average (0.842 vs 0.838).
+- **The remaining errors are counting tasks, not structure lookup.** Per task:
+  - CycleCheck, EdgeExistence, NodeCount and Reachability are at 1.00 for every method, and ShortestPath,
+    ConnectedNodes and DisconnectedNodes are at 0.94-1.00.
+  - The errors are in TriangleCounting (0.42-0.60), EdgeCount (0.42-0.73) and the unanswerable MaximumFlow
+    (0.06-0.26).
+  - No method moves TriangleCounting.
+  - `text-incident` hurts EdgeCount (0.42-0.50 vs 0.58-0.69): the incident list states each edge twice.
+- **Interpretation (confidence: medium).** On GraphQA at this scale, the adjacency text plus LoRA already
+  exposes the structure the tasks need. The ceiling is arithmetic over the graph (counting), which none of the
+  injected encodings provide.
+  - The benchmark is also saturated: the answerable tasks are at 0.90-0.92.
+  - Test graphs also appear in train.
+  - Only one seed was run.

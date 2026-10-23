@@ -1,5 +1,7 @@
 # Knowledge Bundle Update Log
 
+- 2026-10-23: [Graph-structure injection](pages/graph-structure-injection.md) phase 1 done (30 runs, seed 0): no method beats the LoRA text baseline (mean test 0.842). text-colors 0.844, node-tokens 0.842, abs-pe 0.834 vs abs-id 0.839, graphtoken 0.835; frozen GraphToken -7.5 points. Remaining errors are counting tasks (TriangleCounting, EdgeCount) and the unanswerable MaximumFlow.
+
 - 2026-10-22: Added [graph-structure injection](pages/graph-structure-injection.md): standalone `graph_inject/` package (LoRA trainer, 9 methods across hard prompting, soft prompting and absolute PE, plus a full-FT check). Token ids match data_io on all train rows for the three models; 21 tests pass. W&B project `Graph-Positional-Encoding-Exploration`.
 
 - 2026-10-22: Added [KG / graph pretraining corpus](pages/kg-pretraining-corpus.md). Tier 1+2 of the graph corpus list fetched and formatted as data_io rows: 11 folders, 80.1M rows, about 6.8B Gemma tokens (Wikidata 2.68B, YAGO 1.37B, KELM 0.92B, T-REx 0.75B, Wikidata5M 0.71B, GraphQA-generated 0.26B). Labelled KGs also have a triple store with a fixed holdout: Wikidata5M valid/test is forced to test in Wikidata and YAGO and removed from T-REx and KELM. 0 leaks; smoke tokenization passes on the HRM and Gemma paths.
