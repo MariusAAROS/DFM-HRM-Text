@@ -1,4 +1,4 @@
-# Hard prompting, GraphQA adjacency text as is + LoRA ("Less is More"). The reference.
+# Hard prompting, GraphQA adjacency text as is + LoRA (the LoRA arm of "Less is More", no CoT). The reference.
 name: text
 kind: text
 encoding: adjacency

@@ -147,7 +147,7 @@ def main(argv: list[str]):
     for epoch in range(1, cfg.epochs + 1):
         rng = np.random.default_rng([cfg.seed, epoch])
         t_epoch = time.time()
-        for indices in pack_batches(splits["train"], cfg.tokens_per_step, rng):
+        for indices in pack_batches(splits["train"], cfg.tokens_per_step, rng, cfg.samples_per_step):
             batch, scalars = train_batch([splits["train"][i] for i in indices], model.method, cfg.tokens_per_step, rng)
             batch = to_device_prefixlm(batch, scalars, device)
             step += 1

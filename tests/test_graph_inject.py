@@ -21,7 +21,7 @@ GRAPHQA = REPO / "data/graphs/graphqa"
 DATA = REPO / "data/graphs"
 HF = "/work/dfm/marius-ortega/dfm-hrm-graphs/hf"
 METHODS = ["text", "text-incident", "text-colors", "prompt-tuning", "graphtoken", "node-tokens", "abs-pe", "abs-id",
-           "rel-bias", "rel-bias-elem"]
+           "rel-bias", "rel-bias-elem", "graphtoken-faithful", "node-tokens-faithful"]
 
 pytestmark = pytest.mark.skipif(not (GRAPHQA / "hrm-text-grl").exists(), reason="GraphQA data not prepared")
 
@@ -163,6 +163,92 @@ def test_levi_buckets():
     assert (np.diag(e) == 0).all() and e.sum() == 6 * 5
 
 
+@pytest.mark.parametrize("dataset", ["graphqa", "metaqa", "kqapro"])
+def test_token_occurrences(dataset):
+    """Each graph token's occurrence is a span of its own element that overlaps the token; occurrences are -1 exactly
+    off the graph; nodes mentioned several times (edge tuples, facts, the question) have several occurrences."""
+    tok = PromptTokenizer(tokenizer_checkpoint(f"{HF}/HRM-Text-1B"))
+    repeated = 0
+    for r in rows("val", dataset)[:50]:
+        g = parse_graph(r["instruction"], dataset)
+        n = len(r["instruction"])
+        enc = tok.encode_prompt(r["condition"], r["instruction"], g.char_elements(n), char_spans=g.char_spans(n))
+        text, start = tok.render(r["condition"], r["instruction"])
+        offsets = tok.tokenizer(text, add_special_tokens=False, return_offsets_mapping=True)["offset_mapping"]
+        spans = [(a, b, g.nnodes + e) for a, b, e in g.edge_spans] + list(g.node_spans)
+        assert ((enc.occurrences == NO_ELEMENT) == (enc.elements == NO_ELEMENT)).all()
+        for (ts, te), el, o in zip(offsets, enc.elements, enc.occurrences):
+            if o >= 0:
+                a, b, span_el = spans[o]
+                assert span_el == el and ts - start < b and te - start > a
+        node_occ = {}
+        for el, o in zip(enc.elements, enc.occurrences):
+            if NO_ELEMENT < el < g.nnodes:
+                node_occ.setdefault(int(el), set()).add(int(o))
+        repeated += any(len(v) > 1 for v in node_occ.values())
+    assert repeated >= 40
+
+
+def test_cl_owl_colors():
+    """The official naming reaches exactly the six names of the paper's Figure 5, in hue order; the block carries the
+    paper's instructions."""
+    from graph_inject.methods.text import cl_owl_color, color_block
+    names = [cl_owl_color(x) for x in np.linspace(0, 1, 1801)]
+    assert set(names) == {"red", "crimson", "orange", "lime", "green", "teal"}
+    assert names[0] == "red" and names[-1] == "teal" and cl_owl_color(0.5) == "lime"
+    block = color_block(parse_graphqa(rows("val")[0]["instruction"]))
+    assert "similarity metric among nodes" in block and "Color(i)=c" in block and "\n<<COLORS>>\nColor(0):" in block
+
+
+@pytest.mark.parametrize("dataset", ["graphqa", "metaqa", "kqapro"])
+def test_no_graph_text(dataset):
+    """graph_text: false (the faithful arms) keeps the question and drops every edge / fact."""
+    from graph_inject.data import load_samples
+    from graph_inject.methods import build_method
+    for name in ("graphtoken-faithful", "node-tokens-faithful"):
+        cfg = OmegaConf.load(REPO / f"graph_inject/configs/methods/{name}.yaml")
+        method = build_method(cfg, 1536, 1.0)
+        for s in load_samples(str(DATA / dataset / "hrm-text-grl/standard/val.jsonl"), dataset, 100):
+            text = method.rewrite_prompt(s)
+            assert text.startswith("#### Question\nQ: ") and text.endswith(s.instruction[s.graph.question_start:])
+            assert "The edges in G" not in text and "The facts are" not in text
+
+
+def test_colors_fit_context():
+    """KQA Pro text-colors prompts exceed the 4096-position RoPE table without truncation; the colour block is cut to
+    the first nodes that fit, other prompts are untouched."""
+    from graph_inject.data import load_samples
+    from graph_inject.methods.text import PROMPT_TOKEN_BUDGET, TextMethod, color_block
+    ckpt = tokenizer_checkpoint(f"{HF}/HRM-Text-1B")
+    tok = PromptTokenizer(ckpt)
+    method = TextMethod(OmegaConf.create({"encoding": "colors"}), 1536, 1.0)
+    method.setup(ckpt.tokenizer, None)
+    truncated = 0
+    for s in load_samples(str(DATA / "kqapro/hrm-text-grl/standard/val.jsonl"), "kqapro"):
+        text = method.rewrite_prompt(s)
+        end = s.graph.description_span[1]
+        full = s.instruction[:end] + color_block(s.graph) + s.instruction[end:]
+        assert len(tok.encode_prompt(s.condition, text, None).ids) + 96 < 4096
+        truncated += text != full
+        assert text == full or len(ckpt.tokenizer(full, add_special_tokens=False)["input_ids"]) > PROMPT_TOKEN_BUDGET
+    assert 0 < truncated < 20
+
+
+def test_graphtoken_query_readout_empty_graph():
+    """graphtoken-faithful at a single-prompt prefill of a KQA Pro prompt without facts (0 nodes)."""
+    from graph_inject.data import encode_samples, load_samples
+    from graph_inject.methods import build_method
+    from graph_inject.methods.base import CollateItem
+    cfg = OmegaConf.load(REPO / "graph_inject/configs/methods/graphtoken-faithful.yaml")
+    method = build_method(cfg, 1536, 1.0)
+    rows_ = load_samples(str(DATA / "kqapro/hrm-text-grl/standard/val.jsonl"), "kqapro", 15)[13:]
+    for s in encode_samples(rows_, method, PromptTokenizer(tokenizer_checkpoint(f"{HF}/HRM-Text-1B"))):
+        graph = method.collate([CollateItem(s.sample, s.features, s.prompt, offset=0)], rng=None)
+        out = method.inject(torch.zeros(1, len(s.prompt.ids), 1536), graph)
+        assert torch.isfinite(out).all() and out[0, s.prompt.soft_slots].abs().sum() > 0
+    assert any(s.graph.nnodes == 0 for s in rows_)
+
+
 def test_soft_slots_before_content():
     tok = PromptTokenizer(tokenizer_checkpoint(f"{HF}/HRM-Text-1B"))
     r = rows("val")[0]
@@ -233,7 +319,8 @@ def test_zero_init_is_identity(setup, method_name):
 @pytest.mark.parametrize("method_name", METHODS)
 def test_gradients_reach_trainable_modules(setup, method_name, dataset):
     ckpt = setup
-    model = build(ckpt, method_name, lora=True)
+    frozen = OmegaConf.load(REPO / f"graph_inject/configs/methods/{method_name}.yaml").get("train", {}).get("regime") == "frozen"
+    model = build(ckpt, method_name, lora=not frozen)
     # KQA Pro val rows 13-15 include a prompt without facts (row 14): methods must handle empty graphs
     _, batch = batch_for(ckpt, model, dataset=dataset, **{"kqapro": {"n": 3, "start": 13}, "metaqa": {"n": 4}}.get(dataset, {}))
     _, loss, _ = model(None, batch, bp_steps=5)
@@ -342,6 +429,33 @@ def test_rel_bias_train_matches_prefill(setup, method_name):
     effect = (packed0 - packed).abs().mean()
     assert (prefill.argmax(-1) == packed.argmax(-1)).float().mean() > 0.98
     assert gap < 1.5 * noise and effect > 5 * gap, (noise, gap, effect)
+
+
+def test_rel_bias_same_occurrence_is_zero(setup):
+    """GTLM's b_SPD(u, u) = 0: random beta moves every graph-token pair except those within one span occurrence;
+    two mentions of one node (distance 0, other occurrence) do get the learned bucket-0 bias."""
+    from graph_inject.generate import _prefill_batch
+    import torch.utils._pytree as pytree
+    ckpt = setup
+    model = build(ckpt, "rel-bias", lora=False).eval()
+    samples, _ = batch_for(ckpt, model, n=1)
+    torch.manual_seed(0)
+    with torch.no_grad():
+        for beta in model.method.betas:
+            beta.normal_(0, 2.0)
+        cache = model.create_cache(max_batch_size=1, max_seq_len=2048, dtype=torch.bfloat16, device="cuda")
+        model(None, _prefill_batch(samples[0], model.method, pytree.tree_map(lambda x: x[0:1], cache), "cuda"))
+        # the prefill leaves the context set (decode steps clear it)
+        b = model.method.ctx.token_bias(0).cpu()
+        model.method.ctx.clear()
+    el = torch.from_numpy(samples[0].prompt.elements)
+    occ = torch.from_numpy(samples[0].prompt.occurrences)
+    graph = (el[:, None] >= 0) & (el[None, :] >= 0)
+    same_occ = (occ[:, None] == occ[None, :]) & graph
+    same_el_other_occ = (el[:, None] == el[None, :]) & ~same_occ & graph
+    assert same_occ.any() and same_el_other_occ.any()
+    assert (b[:, same_occ] == 0).all() and (b[:, ~graph] == 0).all()
+    assert (b[:, same_el_other_occ] != 0).all() and (b[:, graph & ~same_occ] != 0).float().mean() > 0.99
 
 
 def test_rel_bias_generation_zero_matches_text(setup):

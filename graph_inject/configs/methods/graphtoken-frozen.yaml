@@ -1,4 +1,5 @@
-# GraphToken in its original setting: the LLM is frozen, only the GNN and readout train.
+# GraphToken + text with a frozen LLM: only the GNN and readout train, the graph text is kept (so not GraphToken's
+# original setting, which has no graph text: graphtoken-faithful).
 name: graphtoken-frozen
 kind: graph_token
 num_tokens: 8

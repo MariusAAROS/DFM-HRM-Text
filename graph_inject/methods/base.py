@@ -45,6 +45,7 @@ class CollateItem:
 
 class GraphMethod(nn.Module):
     needs_elements = False  # True: the prompt must be the original text, aligned token -> graph element
+    needs_occurrences = False  # True (with needs_elements): also the span occurrence of every token's element
 
     def __init__(self, cfg, hidden_size: int, embed_rms: float):
         super().__init__()
@@ -59,7 +60,12 @@ class GraphMethod(nn.Module):
         """Optional access to the base model, once, when GraphInjectedLM wraps it."""
 
     def rewrite_prompt(self, sample: GraphQASample) -> str:
-        return sample.instruction
+        """graph_text: false drops the graph description (GraphQA: header to edge list; KG: preamble and facts) and
+        keeps the question, as GraphToken / LLaGA prompt: the structure then reaches the LLM only via the method."""
+        if self.cfg.get("graph_text", True):
+            return sample.instruction
+        start, end = sample.graph.description_span
+        return sample.instruction[:start] + sample.instruction[end:]
 
     def num_soft_tokens(self, sample: GraphQASample) -> int:
         return 0
@@ -76,7 +82,8 @@ class GraphMethod(nn.Module):
 
 class ToEmbeddingScale(nn.Module):
     """RMS-normalize soft tokens and rescale them to the token-embedding RMS (embed_tokens multiplies by
-    1/init_std, ~39 for hidden 1536, so raw projector outputs would be far off-scale). The gain is learned."""
+    1/init_std, ~39 for hidden 1536, so raw projector outputs would be far off-scale). The gain is learned.
+    A deviation shared by every soft-token method: GraphToken, LLaGA and P-Tuning feed the projector output as is."""
 
     def __init__(self, embed_rms: float):
         super().__init__()

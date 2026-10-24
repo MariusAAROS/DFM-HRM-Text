@@ -1,4 +1,5 @@
-# Identity control for rel-bias: beta[layer, head, same element / other element], no graph distances.
+# Identity control for rel-bias: beta[layer, head, same element in another occurrence / other element], no graph
+# distances (same occurrence: 0, as in rel-bias).
 name: rel-bias-elem
 kind: relative_bias
 buckets: element

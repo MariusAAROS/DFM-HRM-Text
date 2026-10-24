@@ -1,4 +1,5 @@
-# Static soft prompt (P-Tuning, MLP reparametrization): capacity control, no graph information.
+# Static soft prompt (P-Tuning, Liu et al., "GPT Understands, Too", 2021; MLP reparametrization as in peft) + text +
+# LoRA, as the P-Tuning arm of Less is More: capacity control, no graph information.
 name: prompt-tuning
 kind: prompt_tuning
 num_tokens: 8

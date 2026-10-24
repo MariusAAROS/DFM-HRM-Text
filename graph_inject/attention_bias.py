@@ -3,8 +3,9 @@
 c(i) is token i's graph element (the token -> element map of abs-pe). The bucket of a pair of elements is their
 distance in the Levi graph (nodes and edges are both vertices, an edge is adjacent to its endpoints), as in
 GTLM / Graphormer's spatial encoding; pairs where either side has no element get the "none" bucket, whose bias is
-fixed at 0, so template and response tokens attend as in the text model. beta is zero-initialized: step 0 is
-exactly the text model.
+fixed at 0, so template and response tokens attend as in the text model. Two tokens of the same span occurrence
+(one node mention, one edge tuple / fact line) also get 0, GTLM's b_SPD(u, u) = 0: the bucket table is per element
+pair, this override per token pair (occ[q] == occ[k]). beta is zero-initialized: step 0 is exactly the text model.
 
 models/ is not edited. install_relative_bias() switches every models.layers.Attention to GraphBiasAttention by
 `__class__` (weights kept). While the shared GraphBiasContext is inactive (every other method, decode steps) the
@@ -68,15 +69,16 @@ class GraphBiasContext:
         self.num_buckets = num_buckets
         self.active = False
 
-    def set(self, bucket: Tensor, doc: Tensor, local: Tensor, block_mask: BlockMask | None):
-        """bucket [NDOC, EL, EL]; per token: doc (-1 = padding) and local element (EL - 1 = none)."""
-        self.bucket, self.doc, self.local, self.block_mask = bucket, doc.clamp_min(0), local, block_mask
+    def set(self, bucket: Tensor, doc: Tensor, local: Tensor, occ: Tensor, block_mask: BlockMask | None):
+        """bucket [NDOC, EL, EL]; per token: doc (-1 = padding), local element (EL - 1 = none) and span occurrence
+        (unique across the batch; -1 = none, whose pairs are in the zero "none" bucket anyway)."""
+        self.bucket, self.doc, self.local, self.occ, self.block_mask = bucket, doc.clamp_min(0), local, occ, block_mask
         self._bias: dict[tuple[int, bool], Tensor] = {}
         self.active = True
 
     def clear(self):
         self.active = False
-        self.bucket = self.doc = self.local = self.block_mask = None
+        self.bucket = self.doc = self.local = self.occ = self.block_mask = None
         self._bias = {}
 
     def bias(self, layer: int) -> Tensor:
@@ -87,6 +89,11 @@ class GraphBiasContext:
             table = torch.cat([beta, beta.new_zeros(beta.shape[0], 1)], dim=1)  # "none" bucket fixed at 0
             self._bias[key] = table[:, self.bucket]
         return self._bias[key]
+
+    def token_bias(self, layer: int) -> Tensor:
+        """[H, L, L] fp32 bias between the tokens of a single-prompt prefill (document 0), same occurrence -> 0."""
+        local, occ = self.local, self.occ
+        return self.bias(layer)[:, 0][:, local[:, None], local[None, :]].masked_fill(occ[:, None] == occ[None, :], 0.0)
 
 
 class GraphBiasAttention(Attention):
@@ -108,10 +115,11 @@ class GraphBiasAttention(Attention):
             key = apply_rotary_pos_emb(key, cos_sin)
 
         ctx = self.bias_ctx
-        bias, doc, local = ctx.bias(self.bias_layer), ctx.doc, ctx.local
+        bias, doc, local, occ = ctx.bias(self.bias_layer), ctx.doc, ctx.local, ctx.occ
 
         def score_mod(score, b, h, q_idx, kv_idx):
-            return score + bias[h, doc[q_idx], local[q_idx], local[kv_idx]]
+            pair_bias = bias[h, doc[q_idx], local[q_idx], local[kv_idx]]
+            return score + torch.where(occ[q_idx] == occ[kv_idx], torch.zeros_like(pair_bias), pair_bias)
 
         q, k, v = (x.transpose(0, 1)[None] for x in (query, key, value))  # [T, H, D] -> [1, H, T, D]
         attn_output = _flex_attention(q, k, v, score_mod=score_mod, block_mask=ctx.block_mask)[0].transpose(0, 1)
@@ -130,8 +138,7 @@ class GraphBiasAttention(Attention):
         cache.keys[0, positions[0]] = key[0]
         cache.values[0, positions[0]] = value[0]
         keys, values = cache.keys[:1, :seqlen], cache.values[:1, :seqlen]
-        local = ctx.local
-        attn_mask = ctx.bias(self.bias_layer)[:, 0][:, local[:, None], local[None, :]].to(query.dtype)  # [H, L, L]
+        attn_mask = ctx.token_bias(self.bias_layer).to(query.dtype)  # [H, L, L]
         if causal:
             attn_mask = attn_mask.masked_fill(~torch.ones(seqlen, seqlen, dtype=torch.bool, device=query.device).tril(),
                                               torch.finfo(query.dtype).min)

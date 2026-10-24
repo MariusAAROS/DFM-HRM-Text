@@ -1,0 +1,16 @@
+# GraphToken in its own setting: frozen LLM, no graph text (question only), RWSE + LapPE + learned IDX features,
+# graph + queried-node readout. AdamW at method_lr (the paper: Lion, lr 0.05).
+name: graphtoken-faithful
+kind: graph_token
+num_tokens: 8
+gnn_hidden: 256
+gnn_layers: 3
+rwse_steps: 16
+lap_k: 8
+idx_dim: 16
+idx_max: 256
+readout: graph+query
+graph_text: false
+# 8 samples per step: about the optimizer steps of `text` on MetaQA / KQA Pro (8192 tokens hold 8.5 / 6.2 text
+# prompts but 50-140 question-only prompts), 3.4x on GraphQA.
+train: {regime: frozen, samples_per_step: 8}

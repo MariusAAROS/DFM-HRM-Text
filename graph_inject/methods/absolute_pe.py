@@ -11,6 +11,7 @@ W_N and W_E start at zero, so step 0 is exactly the text model. Node features:
   structural   RWSE + LapPE (LapPE signs flipped at random in training)   -> "abs-pe", the proposed method
   random       xi_v ~ N(0, I), same dimension, redrawn for every sample  -> "abs-id", the identity control:
                consistent within a prompt (co-reference), no structure. Deterministic per sample at eval.
+               Random, not learned per index: not GraphToken's IDX features (graphtoken-faithful has those).
 
 Close to GRL graph-enc's HRMGraphICL arms (node-identity / WL embeddings behind a scalar gate), which stayed
 at a gate of ~0.002 under full fine-tuning. Differences: zero-init projections instead of a scalar gate,

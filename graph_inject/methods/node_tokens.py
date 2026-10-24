@@ -7,7 +7,15 @@ nodes adds n * (hops + 1) soft tokens, node-major, in front of the (unchanged) t
 
 LLaGA's x_v is a text embedding of the node description; here x_v is the LLM's own (frozen) embedding of the
 node name (mean over its tokens: the digits of v on GraphQA, the entity name on MetaQA / KQA Pro), at unit RMS,
-concatenated with RWSE + LapPE.
+concatenated with RWSE + LapPE (propagated through A_hat with x; LLaGA HO uses no PE).
+
+Two set-ups:
+  node-tokens            graph text kept, + LoRA, 2 hops (the official HO runs use 4; 2 is the ND template's value),
+                         as in GraphQA phase 1.
+  node-tokens-faithful   LLaGA's own: 4 hops, frozen LLM (only the projector trains), no graph text
+                         (graph_text: false).
+Unlike LLaGA, which encodes the centre node(s) of a node / link task, every node is encoded (graph-level QA), and the
+tokens go in front of the prompt instead of a <graph> placeholder.
 """
 import numpy as np
 import torch

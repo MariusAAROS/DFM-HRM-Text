@@ -16,7 +16,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 export PATH="$PWD/.venv/bin:$PATH" OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
-METHODS=${METHODS:-text abs-pe abs-id rel-bias rel-bias-elem node-tokens graphtoken prompt-tuning text-incident text-colors graphtoken-frozen fullft-text}
+METHODS=${METHODS:-text abs-pe abs-id rel-bias rel-bias-elem node-tokens graphtoken prompt-tuning text-incident text-colors graphtoken-frozen fullft-text graphtoken-faithful node-tokens-faithful}
 DATASETS=${DATASETS:-metaqa kqapro graphqa}
 out_root() { python -c "from omegaconf import OmegaConf; print(OmegaConf.load('graph_inject/configs/datasets/$1.yaml').out_root)"; }
 for S in ${SEEDS:-0}; do

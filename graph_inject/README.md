@@ -70,23 +70,49 @@ prompts have no facts at all; every method handles the empty graph. Entity names
 
 | Config | Family | What it is | Source of the code |
 | --- | --- | --- | --- |
-| `text` | hard prompting | GraphQA adjacency text + LoRA ("Less is More", arXiv 2508.10115). **Reference.** | `lora.py` (own: peft cannot wrap `LinearInit`) |
+| `text` | hard prompting | GraphQA adjacency text + LoRA, direct answers: the LoRA arm of "Less is More" (arXiv 2508.10115), not its CoT recipe. **Reference.** | `lora.py` (own: peft cannot wrap `LinearInit`) |
 | `fullft-text` | hard prompting | Same text, full fine-tune, the `cfg_graphqa_hrm1b` recipe. Trainer check against `pretrain.py` (0.82-0.84 test). | |
 | `text-incident` | hard prompting | Talk like a Graph incident encoding ("Node 0 is connected to nodes 1, 2.") | google-research encoders as ported in GRL `graph_text_encoders.py` |
-| `text-colors` | hard prompting | Colorful Talks C-OWL: ordered 1-WL classes as colour words in a `<<COLORS>>` block | no public code: paper template; WL from GRL `graph-enc` |
-| `prompt-tuning` | static soft prompt | 8 P-Tuning tokens (MLP reparametrization). Capacity control: no graph information. | `peft.tuners.p_tuning.PromptEncoder` |
-| `graphtoken` | graph-level soft tokens | GIN(RWSE+LapPE) → [mean ‖ sum] pool → 8 soft tokens, + LoRA (= graph pooling tokens) | PyG `GIN`; no official PyTorch GraphToken code found |
-| `graphtoken-frozen` | graph-level soft tokens | Same, with the LLM frozen (the original GraphToken setting) | |
-| `node-tokens` | node-level soft tokens | LLaGA hop-field template: per node, [name emb ‖ RWSE ‖ LapPE] at hops 0..2 → 2-layer MLP → 3 tokens | ported from `VITA-Group/LLaGA` @ 288240f |
+| `text-colors` | hard prompting | Colorful Talks C-OWL: ordered 1-WL classes as colour words in a `<<COLORS>>` block, with the paper's Figure 5 instructions | colour naming from `angelozangari/CL-OWL` @ 1f22ea7 (`algos.py`, on 0-255 RGB); WL from GRL `graph-enc` |
+| `prompt-tuning` | static soft prompt | 8 P-Tuning tokens (Liu et al. 2021, MLP reparametrization) + text + LoRA, the P-Tuning arm of Less is More. Capacity control: no graph information. | `peft.tuners.p_tuning.PromptEncoder` |
+| `graphtoken` | graph-level soft tokens | GraphToken + text: GIN(RWSE+LapPE) → [mean ‖ sum] pool → 8 soft tokens in front of the graph text, + LoRA (Less is More's "Graph Tokens + Text" arm) | PyG `GIN`; GraphToken's code (TF-GNN) is not public |
+| `graphtoken-frozen` | graph-level soft tokens | Same, LLM frozen, graph text kept (so not GraphToken's own setting) | |
+| `graphtoken-faithful` | graph-level soft tokens | GraphToken's own setting: frozen LLM, **no graph text** (question only), RWSE+LapPE+learned IDX features, readout [mean ‖ sum ‖ h_a ‖ h_b] (a, b = first two nodes named in the question) | |
+| `node-tokens` | node-level soft tokens | LLaGA hop-field template + text + LoRA: per node, [name emb ‖ RWSE ‖ LapPE] at hops 0..2 → 2-layer MLP → 3 tokens | ported from `VITA-Group/LLaGA` @ 288240f |
+| `node-tokens-faithful` | node-level soft tokens | LLaGA's own HO setting: 4 hops (5 tokens per node), frozen LLM, **no graph text** | |
 | `abs-pe` | absolute (additive) | φ(c(i)) added to every token of a node or edge (zero-init). Node: MLP(RWSE+LapPE). Edge: MLP of its endpoints. **The proposed method.** | parser and alignment ported from GRL `graph-enc` (a3d3418) |
-| `abs-id` | absolute (additive) | Same architecture, with random per-node vectors redrawn every sample. **Identity control.** | |
-| `rel-bias` | relative (attention bias) | Learned β[layer, head, bucket] added to the attention score of every pair of graph-element tokens; bucket = Levi-graph distance 0..8, >8, unreachable (GTLM / Graphormer spatial encoding). Zero-init. | no public GTLM code; `attention_bias.py` (FlexAttention) |
-| `rel-bias-elem` | relative (attention bias) | Same, with buckets same element / other element only. **Identity control.** | |
+| `abs-id` | absolute (additive) | Same architecture, with random per-node vectors redrawn every sample. **Identity control** (random, so not GraphToken's learned IDX). | |
+| `rel-bias` | relative (attention bias) | GTLM's SPD bias on top of the text: learned β[layer, head, bucket] added to the attention score of every pair of graph-element tokens; bucket = Levi-graph distance 0..8, >8, unreachable; 0 within one span occurrence (GTLM's b_SPD(u, u) = 0). Zero-init. | buckets as `DarioVajda/graph_model` @ f4feefb (`SPDBias`); `attention_bias.py` (FlexAttention) is ours |
+| `rel-bias-elem` | relative (attention bias) | Same, with buckets same element (other occurrence) / other element only. **Identity control.** | |
 
 On the knowledge graphs, `text-incident` groups the facts by subject (`Santa Sangre: written by Claudio Argento,
 Roberto Leoni; has tags circus.`): Talk like a Graph has no KG encoder, so this one is ours. `text-colors` lists
 `Color(<entity name>):c` from 1-WL on the undirected entity graph. `node-tokens` embeds the entity name (mean of the
 frozen token embeddings of its tokens) instead of the digits of v.
+
+### Deviations from the papers
+
+Checked against the papers and official code on 2026-10-24 (review: `tests/reports/graph_inject_paper_review.md`).
+The main arms keep the graph text and train LoRA, so every arm differs from `text` only by its injection; the
+`-faithful` arms reproduce GraphToken's and LLaGA's own setting.
+
+| Config | Deviation | Why / status |
+| --- | --- | --- |
+| all soft-token methods | `ToEmbeddingScale`: tokens RMS-normalized and scaled by a learned gain (init = embedding RMS) | HRM's `embed_tokens` scales by 1/init_std (~39); raw projector outputs would be off-scale |
+| `text` | no instructive CoT (Less is More's main ingredient), integer ids instead of random words | the plain LoRA + text reference |
+| `text-incident` | neighbour order = edge-list order (TLAG: generator insertion order) | not checkable: GraphQA's incident files are not on disk; at most a permutation within a line |
+| `text-colors` | C-OWL, not CL-OWL (no WL labels); LoRA instead of frozen prompting; on KQA Pro the colour block is cut to the first nodes that fit 3,990 prompt tokens (RoPE table: 4,096 positions incl. 96 generated), 0.6% of prompts (HRM test 4, Mimir test 3); the CL-OWL repo divides RGB by 255 before its 0-255 thresholds (everything would be "lime"), here the thresholds get 0-255 | the 0-255 reading reaches red, crimson, orange, lime, green, teal: the colours of the paper's Figure 5. Not hue-monotone (lime appears twice), as the official code |
+| `prompt-tuning` | MLP encoder (P-Tuning v1 uses BiLSTM + MLP), text kept | Less is More's arm; GraphToken's soft-prompt baseline is frozen prompt tuning without text |
+| `graphtoken`, `-frozen` | graph text kept; graph-level readout only; no IDX | Less is More's "Graph Tokens + Text". The Grover et al. "graph pooling tokens" label was wrong (their k tokens come from k pooling clusters, here one vector reshaped) and is dropped |
+| `graphtoken-faithful` | AdamW at 1e-3 (paper: Lion, 0.05); one readout for all tasks instead of a task-dependent choice; GIN only | |
+| both `-faithful` arms | at most 8 samples per step (`samples_per_step`) | question-only prompts: 8192 tokens would hold 50-140 of them, so ~15-50 steps per epoch; 8 gives about `text`'s step count on MetaQA / KQA Pro, 3.4x on GraphQA |
+| `node-tokens` | 2 hops (official HO: 4), LoRA (LLaGA: frozen), text kept, every node encoded (LLaGA: the centre node(s)), x_v = mean name embedding + RWSE + LapPE (LLaGA: SBERT/RoBERTa text embedding) | comparability with GraphQA phase 1 |
+| `node-tokens-faithful` | every node encoded, tokens in front of the prompt instead of a `<graph>` placeholder, same x_v | graph-level QA |
+| `rel-bias` | graph text kept with sequential RoPE (GTLM: one segment per node, RoPE from 0 in each, no edge-list text, a prompt node linked to the queried nodes); SPD only (GTLM: + RRWP + magnetic Laplacian); distance 0 between different occurrences of one element is a learned bucket | the RPE counterpart of `abs-pe` on the text model; GTLM has no repeated mentions; the bucket ties question mentions to the node's facts |
+
+On MetaQA and KQA Pro the `-faithful` arms are close to closed-book: without the facts text the answer strings are
+not in the prompt (`node-tokens-faithful` carries the mean name embedding of each node, `graphtoken-faithful` no names
+at all). They are meaningful mainly on GraphQA.
 
 ### How the methods plug in
 
@@ -102,7 +128,9 @@ frozen token embeddings of its tokens) instead of the digits of v.
   document + PrefixLM mask of the packed batch (the FA2 varlen kernel takes no bias), and the prompt prefill adds the
   same bias to the SDPA float mask. Decode steps and every other method run the parent class. The bias is gathered
   per layer into `[H, NDOC, EL, EL]` once per forward: indexing the small `[H, buckets]` table inside the kernel
-  makes its backward ~17x slower (atomic adds). Pairs where either token has no element (template, response) get 0.
+  makes its backward ~17x slower (atomic adds). Pairs where either token has no element (template, response) get 0,
+  and so do two tokens of the same span occurrence (one node mention, one edge tuple / fact line): a per-token
+  occurrence id (`PromptGraph.char_spans` → `EncodedPrompt.occurrences`) overrides the per-element bucket.
 - **Where the injection enters the model.** HRM-Text-1B and Mimir have `inject_x=False`, so the token embedding
   enters only as the initial `z_H`. A test checks that gradient still reaches every method's modules.
 

@@ -1,4 +1,5 @@
-# Identity control for abs-pe: random per-node vectors (consistent within a prompt), same architecture.
+# Identity control for abs-pe: random per-node vectors (consistent within a prompt), same architecture. Random, not
+# learned per index: an identity control, not GraphToken's IDX features.
 name: abs-id
 kind: absolute_pe
 node_features: random

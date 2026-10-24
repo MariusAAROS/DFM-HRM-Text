@@ -65,28 +65,31 @@ def encode_samples(samples: list[GraphQASample], method: GraphMethod, tokenizer:
     out = []
     for s in samples:
         prompt = method.rewrite_prompt(s)
-        char_elements = None
+        char_elements = char_spans = None
         if method.needs_elements:
             if prompt != s.instruction:
                 raise ValueError("element alignment needs the original prompt")
             char_elements = s.graph.char_elements(len(prompt))
+            if method.needs_occurrences:
+                char_spans = s.graph.char_spans(len(prompt))
         out.append(EncodedSample(
             sample=s,
-            prompt=tokenizer.encode_prompt(s.condition, prompt, char_elements, method.num_soft_tokens(s)),
+            prompt=tokenizer.encode_prompt(s.condition, prompt, char_elements, method.num_soft_tokens(s), char_spans),
             response_ids=tokenizer.encode_response(s.condition, prompt, s.response),
             gold_ids=tokenizer.gold_answer_ids(s.response),
             features=method.featurize(s)))
     return out
 
 
-def pack_batches(samples: list[EncodedSample], max_tokens: int, rng: np.random.Generator) -> list[list[int]]:
-    """Shuffle, then fill batches of at most max_tokens in order."""
+def pack_batches(samples: list[EncodedSample], max_tokens: int, rng: np.random.Generator,
+                 max_samples: int | None = None) -> list[list[int]]:
+    """Shuffle, then fill batches of at most max_tokens (and at most max_samples samples) in order."""
     batches, current, used = [], [], 0
     for i in rng.permutation(len(samples)):
         n = samples[i].train_length
         if n > max_tokens:
             raise ValueError(f"sample {i} has {n} tokens > {max_tokens}")
-        if used + n > max_tokens:
+        if used + n > max_tokens or len(current) == (max_samples or -1):
             batches.append(current)
             current, used = [], 0
         current.append(int(i))

@@ -1,4 +1,5 @@
-# Relative attention bias (phase 2): learned beta[layer, head, Levi-graph distance bucket] on graph-element pairs.
+# Relative attention bias (phase 2, GTLM SPD bias on top of the text): learned beta[layer, head, Levi-graph distance
+# bucket] on graph-element pairs; 0 within one span occurrence (GTLM b_SPD(u, u) = 0).
 name: rel-bias
 kind: relative_bias
 buckets: distance

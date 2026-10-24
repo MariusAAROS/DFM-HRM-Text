@@ -64,6 +64,24 @@ class PromptGraph:
             elem[start:end] = v
         return elem
 
+    def char_spans(self, text_len: int) -> np.ndarray:
+        """Occurrence id of every character (edge spans 0.., then node spans; -1 outside the graph), with the
+        override order of char_elements: two mentions of one node are one element but two occurrences."""
+        occ = np.full(text_len, NO_ELEMENT, dtype=np.int64)
+        for i, (start, end, _) in enumerate(self.edge_spans):
+            occ[start:end] = i
+        for i, (start, end, _) in enumerate(self.node_spans):
+            occ[start:end] = len(self.edge_spans) + i
+        return occ
+
+    def question_nodes(self) -> list[int]:
+        """Distinct nodes mentioned on the Q: line, in order of first mention."""
+        out = []
+        for start, _, v in sorted(self.node_spans):
+            if start >= self.question_start and v not in out:
+                out.append(v)
+        return out
+
 
 GraphQAGraph = PromptGraph
 

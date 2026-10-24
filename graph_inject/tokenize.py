@@ -23,6 +23,7 @@ class EncodedPrompt:
     ids: np.ndarray        # [L] instruction ids incl. template tokens and soft-token placeholders
     elements: np.ndarray   # [L] graph element of each token (NO_ELEMENT for template / placeholder tokens)
     soft_slots: np.ndarray # [k] positions of the soft-token placeholders
+    occurrences: np.ndarray | None = None  # [L] span occurrence of each token's element (-1: none), if requested
 
 
 def tokenizer_checkpoint(hf_dir: str):
@@ -63,7 +64,7 @@ class PromptTokenizer:
         return prefix + prompt + self.info["eoq"], len(prefix)
 
     def encode_prompt(self, condition: str, prompt: str, char_elements: np.ndarray | None,
-                      num_soft_tokens: int = 0) -> EncodedPrompt:
+                      num_soft_tokens: int = 0, char_spans: np.ndarray | None = None) -> EncodedPrompt:
         ids = np.asarray(self.ckpt.tokenize_prompt(condition, prompt), dtype=np.int64)
         text, start = self.render(condition, prompt)
         enc = self.tokenizer(text, add_special_tokens=False, return_offsets_mapping=True)
@@ -77,13 +78,23 @@ class PromptTokenizer:
             full[start:start + n] = char_elements[:n]
             for i, (s, e) in enumerate(enc["offset_mapping"]):
                 elements[i] = token_element(full[s:e])
+        occurrences = None
+        if char_spans is not None:
+            spans = np.full(len(text), NO_ELEMENT, dtype=np.int64)
+            spans[start:start + n] = char_spans[:n]
+            occurrences = np.full(len(ids), NO_ELEMENT, dtype=np.int64)
+            for i, (s, e) in enumerate(enc["offset_mapping"]):
+                if elements[i] != NO_ELEMENT:  # the span covering most of the token's characters of its element
+                    occurrences[i] = token_element(spans[s:e][full[s:e] == elements[i]])
 
         # Soft-token slots go right before the prompt content (after <bos>/<|turn>user or <|im_start|><cond>).
         insert_at = next(i for i, (s, e) in enumerate(enc["offset_mapping"]) if e > start)
         slots = np.arange(insert_at, insert_at + num_soft_tokens)
         ids = np.insert(ids, insert_at, np.full(num_soft_tokens, PLACEHOLDER_ID))
         elements = np.insert(elements, insert_at, np.full(num_soft_tokens, NO_ELEMENT))
-        return EncodedPrompt(ids=ids, elements=elements, soft_slots=slots)
+        if occurrences is not None:
+            occurrences = np.insert(occurrences, insert_at, np.full(num_soft_tokens, NO_ELEMENT))
+        return EncodedPrompt(ids=ids, elements=elements, soft_slots=slots, occurrences=occurrences)
 
     def encode_response(self, condition: str, prompt: str, response: str) -> np.ndarray:
         """Response ids incl. stop token(s), as data_io supervises them."""

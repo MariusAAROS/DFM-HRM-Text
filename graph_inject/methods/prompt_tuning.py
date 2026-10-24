@@ -1,8 +1,10 @@
 """Static soft prompt (no graph information): the capacity control for the graph-conditioned soft prompts.
 
-P-Tuning (Liu et al., 2022) with the MLP reparametrization, using peft's own PromptEncoder module:
-P = MLP(Z), Z an embedding table of k virtual tokens. The same k vectors are written into the k
-placeholder slots of every prompt.
+P-Tuning (Liu et al., "GPT Understands, Too", arXiv 2103.10385, 2021) with the MLP reparametrization (the paper's
+encoder is a BiLSTM + MLP), using peft's own PromptEncoder module: P = MLP(Z), Z an embedding table of k virtual
+tokens. The same k vectors are written into the k placeholder slots of every prompt, in front of the unchanged graph
+text, + LoRA: Less is More's P-Tuning arm (GraphToken's soft-prompt baseline is instead prompt tuning with a frozen
+LLM and no graph text).
 """
 from peft import PromptEncoderConfig
 from peft.tuners.p_tuning import PromptEncoder

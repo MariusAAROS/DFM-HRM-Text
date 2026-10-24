@@ -1,4 +1,5 @@
-# GraphToken: GIN over RWSE + LapPE node features -> k graph-level soft tokens (+ LoRA = graph pooling tokens).
+# GraphToken + text ("Graph Tokens + Text", Less is More): GIN over RWSE + LapPE node features -> 8 graph-level soft
+# tokens in front of the unchanged graph text, + LoRA. See graphtoken-faithful for GraphToken's own setting.
 name: graphtoken
 kind: graph_token
 num_tokens: 8

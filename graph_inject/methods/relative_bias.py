@@ -6,8 +6,17 @@ embeddings untouched; see attention_bias.py for the buckets and the attention pa
   element    bucket = same element / other element: node identity only, no structure           -> "rel-bias-elem",
              the identity control (the counterpart of abs-id)
 
-Pairs where either token has no graph element (template, response) get no bias. No public GTLM code was found;
-the buckets follow Graphormer's spatial encoding on the Levi graph so that edge tokens get distances too.
+Pairs where either token has no graph element (template, response) get no bias, and neither do two tokens of the same
+span occurrence (one node mention, one edge tuple / fact line): GTLM's b_SPD(u, u) = 0 (Property 2, "pretraining
+backward compatibility": text inside a node attends as in the base LLM; official code DarioVajda/graph_model @
+f4feefb, src/models/bias.py SPDBias masks spd == 0). GTLM has one text segment per node; here a node is mentioned
+several times (edge tuples, facts, the question), so distance 0 between *different* occurrences of one element
+stays a learned bucket: it is what ties a question mention to the node's facts.
+
+Deviations from GTLM, by design (structure on top of the text model, the RPE counterpart of abs-pe): the graph text
+is kept with sequential RoPE (GTLM: per-node RoPE from 0, no edge-list text, a prompt node linked to the queried
+nodes), and only the SPD bias is used (GTLM: SPD + RRWP + magnetic Laplacian; rel-bias is its SPD-only ablation
+arm). The Levi graph is GTLM's "incidence" setting.
 """
 import numpy as np
 import torch
@@ -27,6 +36,7 @@ def _round_up(x: int, m: int) -> int:
 
 class RelativeBiasMethod(GraphMethod):
     needs_elements = True
+    needs_occurrences = True
 
     def __init__(self, cfg, hidden_size: int, embed_rms: float):
         super().__init__(cfg, hidden_size, embed_rms)
@@ -43,7 +53,7 @@ class RelativeBiasMethod(GraphMethod):
         el = _round_up(max(it.features["buckets"].shape[0] for it in items) + 1, EL_MULTIPLE)  # + the none element
         none = self.num_buckets - 1
         bucket = np.full((_round_up(len(items), NDOC_MULTIPLE), el, el), none, dtype=np.uint8)
-        local, doc, prefix, offset = [], [], [], 0
+        local, doc, prefix, occ, offset, occ_offset = [], [], [], [], 0, 0
         for d, it in enumerate(items):
             if it.offset != offset:
                 raise ValueError("relative bias expects the samples packed in order from position 0")
@@ -55,10 +65,15 @@ class RelativeBiasMethod(GraphMethod):
             local.append(lq)
             doc.append(np.full(n, d, dtype=np.int64))
             prefix.append(np.arange(n) < n_prompt)
+            o = np.full(n, -1, dtype=np.int64)  # occurrence ids unique across the packed documents
+            o[:n_prompt] = np.where(it.prompt.occurrences >= 0, it.prompt.occurrences + occ_offset, -1)
+            occ.append(o)
+            occ_offset += int(it.prompt.occurrences.max(initial=-1)) + 1
             offset += n
         return {"graph_bias_bucket": torch.from_numpy(bucket), "graph_bias_local": torch.from_numpy(np.concatenate(local)),
                 "graph_bias_doc": torch.from_numpy(np.concatenate(doc)),
-                "graph_bias_prefix": torch.from_numpy(np.concatenate(prefix))}
+                "graph_bias_prefix": torch.from_numpy(np.concatenate(prefix)),
+                "graph_bias_occ": torch.from_numpy(np.concatenate(occ))}
 
     def inject(self, embeddings: Tensor, graph: dict[str, Tensor]) -> Tensor:
         if "graph_bias_bucket" not in graph:  # decode steps: no bias
@@ -68,7 +83,8 @@ class RelativeBiasMethod(GraphMethod):
         pad = embeddings.numel() // embeddings.shape[-1] - graph["graph_bias_local"].shape[0]
         local = F.pad(graph["graph_bias_local"], (0, pad), value=bucket.shape[-1] - 1)
         doc = F.pad(graph["graph_bias_doc"], (0, pad), value=-1)
+        occ = F.pad(graph["graph_bias_occ"], (0, pad), value=-1)
         # packed training batch: embeddings [T, D] -> FlexAttention mask; a prefill is [1, L, D] (KV-cache SDPA)
         block_mask = packed_block_mask(doc, F.pad(graph["graph_bias_prefix"], (0, pad))) if embeddings.dim() == 2 else None
-        self.ctx.set(bucket, doc, local, block_mask)
+        self.ctx.set(bucket, doc, local, occ, block_mask)
         return embeddings

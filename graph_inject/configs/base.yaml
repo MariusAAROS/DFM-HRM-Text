@@ -13,6 +13,7 @@ weight_decay: 0.0
 warmup_steps: 20          # linear warmup, then constant (as cfg_graphqa_hrm1b)
 grad_clip: 1.0
 tokens_per_step: 8192     # packed PrefixLM batch, as cfg_graphqa_hrm1b
+samples_per_step: null    # also cap the samples per batch (the no-graph-text arms: short prompts, else few steps)
 max_steps: null           # stop early (benchmarks / smoke tests)
 log_every: 10
 eval: {max_generation: 96, batch_size: 16, val_subset: null, limit: null}  # val_subset: N val samples per epoch

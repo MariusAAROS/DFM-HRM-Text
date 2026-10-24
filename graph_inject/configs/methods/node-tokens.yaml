@@ -1,4 +1,5 @@
-# LLaGA hop-field node tokens: (hops + 1) soft tokens per node, 2-layer MLP projector, no GNN.
+# LLaGA hop-field node tokens + text + LoRA: (hops + 1) soft tokens per node, 2-layer MLP projector, no GNN. 2 hops
+# (official HO: 4, see node-tokens-faithful), kept for comparability with GraphQA phase 1.
 name: node-tokens
 kind: node_tokens
 hops: 2

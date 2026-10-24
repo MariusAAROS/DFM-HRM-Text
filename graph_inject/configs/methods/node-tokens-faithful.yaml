@@ -1,0 +1,11 @@
+# LLaGA in its own setting (hop-field overview, VITA-Group/LLaGA @ 288240f): 4 hops (use_hop=4, the HO runs), frozen
+# LLM (only the projector trains, --tune_mm_mlp_adapter), no graph text (the soft tokens stand in for the graph).
+name: node-tokens-faithful
+kind: node_tokens
+hops: 4
+rwse_steps: 16
+lap_k: 8
+graph_text: false
+# 8 samples per step: about the optimizer steps of `text` on MetaQA / KQA Pro (8192 tokens hold 8.5 / 6.2 text
+# prompts but 50-140 question-only prompts), 3.4x on GraphQA.
+train: {regime: frozen, samples_per_step: 8}

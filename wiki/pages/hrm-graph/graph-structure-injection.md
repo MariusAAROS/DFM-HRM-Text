@@ -4,7 +4,7 @@ title: Graph-Structure Injection on GraphQA, MetaQA and KQA Pro (graph_inject)
 description: Standalone package that fine-tunes HRM-Text-1B, DFM-Mimir v1 and v1.5 on GraphQA, MetaQA and KQA Pro with hard-prompt, soft-prompt, absolute-PE and relative-attention-bias graph injection under one LoRA trainer; design, verification, run matrix and results.
 tags: [graphs, graphqa, metaqa, kqapro, lora, soft-prompts, positional-encoding, attention-bias, hrm-text-1b, mimir]
 status: stable
-last_updated: 2026-10-23
+last_updated: 2026-10-24
 confidence: high
 ---
 # Graph-Structure Injection on GraphQA, MetaQA and KQA Pro
@@ -35,12 +35,13 @@ techniques: hard prompting, soft prompting, and embedding-level injection.
 
 | Method | Family | Implementation |
 | --- | --- | --- |
-| `text` | hard prompting | Less is More: GraphQA text + LoRA |
+| `text` | hard prompting | GraphQA text + LoRA, direct answers (the LoRA arm of Less is More, not its CoT recipe) |
 | `text-incident` | hard prompting | Talk like a Graph incident encoding |
-| `text-colors` | hard prompting | Colorful Talks C-OWL |
-| `prompt-tuning` | static soft prompt | peft PromptEncoder; capacity control |
-| `graphtoken`, `graphtoken-frozen` | graph-level soft tokens | PyG GIN |
-| `node-tokens` | node-level soft tokens | LLaGA hop-field template, ported from VITA-Group/LLaGA |
+| `text-colors` | hard prompting | Colorful Talks C-OWL, official CL-OWL colour naming (since 2026-10-24) |
+| `prompt-tuning` | static soft prompt | peft PromptEncoder + text; capacity control (Less is More's P-Tuning arm) |
+| `graphtoken`, `graphtoken-frozen` | graph-level soft tokens | PyG GIN, graph text kept ("Graph Tokens + Text") |
+| `node-tokens` | node-level soft tokens | LLaGA hop-field template + text + LoRA, ported from VITA-Group/LLaGA |
+| `graphtoken-faithful`, `node-tokens-faithful` | soft tokens | GraphToken / LLaGA in their own setting: frozen LLM, no graph text (added 2026-10-24, below) |
 | `abs-pe` | absolute additive PE | φ(c(i)) shared by all tokens of a node or edge; the proposed method |
 | `abs-id` | absolute additive PE | random-identity control for `abs-pe` |
 
@@ -85,6 +86,15 @@ The relative attention bias (GTLM / Graphormer) is phase 2, below.
   `abs-id` and `prompt-tuning` controls are needed.
 - Prior result: GRL `graph-enc` gated node and WL embeddings under full FT gave no gain (0.901 vs 0.897, control
   0.896). The gate stayed at about 0.002.
+- Fidelity review against the source papers (2026-10-24):
+  [`tests/reports/graph_inject_paper_review.md`](../../../tests/reports/graph_inject_paper_review.md). Its claims
+  were checked against the papers and official code and applied the same day; see
+  [Paper-fidelity fixes](#paper-fidelity-fixes-2026-10-24) below, and the full deviation table in
+  [`graph_inject/README.md`](../../../graph_inject/README.md#deviations-from-the-papers).
+  - Re-checked the same day after the fixes: all 18 pass-1 findings are fixed or documented. Ten minor items
+    remain (N1–N10 in the report), for example LLaGA's paper (mean aggregation) and code (D^-1/2 A D^-1/2)
+    disagree, and the `-faithful` arms on MetaQA / KQA Pro are close to closed-book. The GPU tests were not
+    re-run in that pass.
 
 ## Results, phase 1 (seed 0, 2026-10-22/23)
 
@@ -96,7 +106,7 @@ the 3 models (samples won / lost, exact McNemar p-value).
 | Method | HRM-1B | Mimir v1 | Mimir v1.5 | Mean (w/o MaxFlow) | Pooled vs `text` |
 | --- | ---: | ---: | ---: | ---: | --- |
 | `text` (LoRA, no graph module) | 0.829 | **0.857** | 0.842 | **0.842** (0.909) | reference |
-| `text-colors` | 0.831 | 0.855 | 0.847 | **0.844** (0.906) | +24 / -22, p=0.88 |
+| `text-colors16` (16-name palette, superseded) | 0.831 | 0.855 | 0.847 | **0.844** (0.906) | +24 / -22, p=0.88 |
 | `node-tokens` | 0.821 | 0.849 | **0.855** | **0.842** (0.905) | +23 / -24, p=1.00 |
 | `abs-id` (control) | 0.826 | 0.836 | **0.855** | 0.839 (0.901) | +24 / -28, p=0.68 |
 | `fullft-text` | **0.847** | 0.839 | 0.829 | 0.838 (0.900) | +29 / -34, p=0.62 |
@@ -106,6 +116,8 @@ the 3 models (samples won / lost, exact McNemar p-value).
 | `prompt-tuning` (control) | 0.810 | 0.831 | 0.842 | 0.828 (0.893) | +19 / -36, p=0.03 |
 | `graphtoken-frozen` | 0.709 | 0.787 | 0.805 | 0.767 (0.830) | +16 / -103, p<0.001 |
 
+- `text-colors16` used our own 16-name hue palette, not the paper's. Its W&B runs were deleted on 2026-10-24, the
+  outputs are archived as `<model>/text-colors16_s0`, and `text-colors` is rerun with the official palette.
 - **No injection method beats the no-PE `text` baseline.** Every LoRA method is within about 2 points of it, both
   per model and on average. All pooled paired tests are non-significant, except two losses: frozen GraphToken
   (-7.5 points) and prompt tuning (-1.4 points, p=0.03).
@@ -115,7 +127,7 @@ the 3 models (samples won / lost, exact McNemar p-value).
   0.25 (Mimir v1) and 0.17 (Mimir v1.5), against a token-embedding RMS of 1.02, 0.99 and 0.43. That is unlike
   GRL `graph-enc`, whose gate stayed at about 0.002. `abs-id` learns a larger φ than `abs-pe` on HRM-1B
   (0.78 vs 0.30).
-- **Freezing the LLM costs 4-12 points.** GraphToken needs the LLM adapted, as in the graph pooling tokens paper.
+- **Freezing the LLM costs 4-12 points** (`graphtoken-frozen`, graph text kept): GraphToken needs the LLM adapted.
 - **The trainer check passes.** `fullft-text` reaches 0.847 / 0.839 / 0.829, against `pretrain.py` clip-1.0 runs
   of 0.824 / 0.843 / 0.818. LoRA `text` is as good as full FT on average (0.842 vs 0.838).
 - **The remaining errors are counting tasks, not structure lookup.** Per task:
@@ -184,8 +196,9 @@ experiments](graph-reasoning-experiments.md)):
 **Phase 2: relative attention bias** (`graph_inject/attention_bias.py`, `methods/relative_bias.py`).
 - `rel-bias`: a learned β[layer, head, bucket], zero-init, added to the score of every pair of graph-element
   tokens. Buckets are Levi-graph distances 0..8 (0 = same element; adjacent nodes are at 2), >8, and unreachable.
-  Pairs where either token has no element get 0.
-- `rel-bias-elem`: buckets same element / other element only. This is the identity control.
+  Pairs where either token has no element get 0. Since 2026-10-24, so do two tokens of the same span occurrence
+  (GTLM's b_SPD(u, u) = 0, below).
+- `rel-bias-elem`: buckets same element (other occurrence) / other element only. This is the identity control.
 - Implementation: every `Attention` is switched to `GraphBiasAttention` by `__class__`; `models/` is not edited.
   - Training uses FlexAttention with the packed document + PrefixLM mask.
   - The prompt prefill adds the bias to the SDPA float mask.
@@ -232,3 +245,77 @@ experiments](graph-reasoning-experiments.md)):
 **Run matrix** (seed 0). Queue started 2026-10-23 14:10; log `/work/dfm/marius-ortega/dfm-hrm-graphs/graph_inject/queue_kg.log`. `run_matrix.sh` in priority order: text, abs-pe, abs-id, rel-bias, rel-bias-elem,
 node-tokens, graphtoken, prompt-tuning, text-incident, text-colors, graphtoken-frozen, fullft-text, over MetaQA,
 KQA Pro and GraphQA (GraphQA phase-1 runs are skipped as done). That is 60 phase-1 KG runs plus 18 phase-2 runs.
+- Stopped 2026-10-24 08:45 after 18 KG runs (text, abs-pe, abs-id), for the paper-fidelity fixes (below).
+- Restarted the same day, with `graphtoken-faithful` and `node-tokens-faithful` appended. Remaining: 81 runs,
+  about 110 h (confidence: medium).
+  - 66 KG runs: 12 rel-bias at about 2.4 h, 42 others at about 1.4 h, and 12 faithful at about 0.7 h.
+  - 15 GraphQA runs: rel-bias and rel-bias-elem, the `text-colors` reruns, and the two faithful arms.
+
+## Paper-fidelity fixes (2026-10-24)
+
+The review ([`tests/reports/graph_inject_paper_review.md`](../../../tests/reports/graph_inject_paper_review.md)) was
+checked against the primary sources. Its claims hold, apart from the `text-incident` neighbour order (Low), which
+cannot be checked here because GraphQA's own incident files are not on disk. Two of the checks found more than the
+review:
+- **GTLM** (`DarioVajda/graph_model` @ f4feefb): `SPDBias.forward` multiplies by `spd > 0`, and `finalize_node_bias`
+  zeroes the intra-node diagonal, so the same-node bias is fixed at 0 in the code as well as in the paper.
+- **CL-OWL** (`angelozangari/CL-OWL` @ 1f22ea7): `_compute_colors_for_iteration` returns RGB / 255, but
+  `rgb_to_color_name` thresholds expect 0-255; as written, every node would be "lime". On 0-255 RGB, amber, yellow
+  and cyan are shadowed by earlier branches, so the reachable names are red, crimson, orange, lime, green and teal.
+  Those are exactly the colours of the paper's Figure 5 example, which suggests the authors ran the 0-255 version.
+
+**Behaviour changes.**
+- **`rel-bias`, `rel-bias-elem`.** Token pairs within one span occurrence (one node mention, one edge tuple, one
+  KG fact line or qualifier) get bias 0, as GTLM's b_SPD(u, u) = 0 (Property 2: text inside a node attends as in
+  the base LLM). GTLM has one text segment per node; here a node is mentioned several times, so distance 0 between
+  *different* occurrences of one element stays a learned bucket. It is what ties a question mention to the node's
+  facts. Implementation: `PromptGraph.char_spans` → `EncodedPrompt.occurrences` → `graph_bias_occ`, applied as
+  `where(occ[q] == occ[k], 0, bias)` in the FlexAttention `score_mod` and in the prefill mask
+  (`GraphBiasContext.token_bias`).
+- **`text-colors`.** CL-OWL's own colour naming (ported verbatim, on 0-255 RGB) replaces our 16-name palette, and
+  the block carries the paper's four Figure 5 instruction sentences (WL similarity, structural role, `Color(i)=c`,
+  "similarity metric among nodes"). Note: the official mapping is not hue-monotone ("lime" covers two hue ranges).
+- **`text-colors` on KQA Pro: context cap (a latent bug, found by the smoke run).** The colour block takes KQA Pro
+  prompts up to 4,496 HRM tokens (5,233 in train), past the 4,096-position RoPE table of all three models. This
+  happens on 0.6% of prompts, and the run crashes at the first one (CUDA gather assert). The old 16-name block was
+  as long, so the queued KQA Pro `text-colors` runs would have failed too. The block is now cut to the first nodes
+  that fit 3,990 prompt tokens (`text.PROMPT_TOKEN_BUDGET`). This truncates 9 val / 4 test prompts (HRM) and
+  5 / 3 (Mimir); the colours still come from the whole graph.
+- **New arms `graphtoken-faithful` and `node-tokens-faithful`.** These are GraphToken's and LLaGA's own settings. In
+  both, the LLM is frozen, and `graph_text: false` drops the graph description (the question stays).
+  - `graphtoken-faithful`: RWSE + LapPE + learned IDX features (16-d, `idx_max` 256; the data has at most 180 nodes).
+    Readout [mean ‖ sum ‖ h_a ‖ h_b], where a and b are the first two nodes named in the question (zeros if absent).
+    That is GraphToken's node- and edge-level readouts, applied to every task. Unlike the paper, it uses AdamW at
+    1e-3 (the paper: Lion, 0.05).
+  - `node-tokens-faithful`: 4 hops (LLaGA HO's `use_hop=4`), 5 tokens per node.
+  - Both take at most 8 samples per step (`samples_per_step: 8`). Question-only prompts are 10-20x shorter, so
+    8192 tokens would mean about 15-50 optimizer steps per epoch. With the cap they get about `text`'s step count
+    on MetaQA and KQA Pro, and 3.4x on GraphQA. Bench: 0.7 s/step, 26-31 GB peak (HRM-1B).
+  - On MetaQA and KQA Pro these arms are close to closed-book: without the facts text the answer strings are not in
+    the prompt. They are meaningful mainly on GraphQA.
+
+**Relabelled, unchanged runs.**
+- `text` is the LoRA arm of Less is More, not its CoT recipe.
+- `graphtoken` and `graphtoken-frozen` are "Graph Tokens + Text". The "graph pooling tokens" (Grover et al.) label
+  was wrong: their k tokens come from k pooling clusters, here one vector is reshaped.
+- `graphtoken-frozen` is not GraphToken's original setting, because the graph text is kept.
+- `node-tokens` uses 2 hops (the ND template's value; HO uses 4), LoRA and the text.
+- The P-Tuning citation is now Liu et al. 2021, "GPT Understands, Too". Its encoder is BiLSTM + MLP; peft's is
+  an MLP.
+- `abs-id` is a random identity control, not GraphToken's learned IDX.
+- `ToEmbeddingScale` is a deviation shared by every soft-token method.
+
+**Impact on runs.**
+- The 45 finished runs other than `text-colors` are unaffected, because their code paths did not change. That is
+  27 GraphQA phase-1 runs, and KG `text`, `abs-pe` and `abs-id` × 3 models × 2 datasets.
+- GraphQA `text-colors` × 3 is superseded (above).
+- `metaqa-hrm1b-rel-bias` was running with the learned same-element bias. It was killed after about 30 min, and its
+  W&B run deleted. No other rel-bias run had started.
+- Tests: `tests/test_graph_inject.py`, 81 passed. New:
+  - the KQA Pro colour block fits the context;
+  - the `graphtoken-faithful` query readout on an empty graph;
+  - occurrences on 3 datasets;
+  - the CL-OWL palette;
+  - no-graph-text prompts;
+  - the rel-bias same-occurrence zero;
+  - gradients for both faithful arms.
