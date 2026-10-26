@@ -1,0 +1,7 @@
+# rel-bias with a 20x higher bias learning rate (method_lr 2e-2 instead of 1e-3). At 1e-3 the learned beta stayed at
+# |beta| ~ 0.03 on MetaQA (flat across distances), so rel-bias was close to text. GTLM (DarioVajda/graph_model
+# @ f4feefb) trains its biases at bias_lr 5e-3 (GraphQA default), and its sweeps pick 2e-2 in 8 of 9 cells.
+name: rel-bias-hilr
+kind: relative_bias
+buckets: distance
+train: {method_lr: 2.0e-2}

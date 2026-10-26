@@ -83,6 +83,7 @@ prompts have no facts at all; every method handles the empty graph. Entity names
 | `abs-pe` | absolute (additive) | φ(c(i)) added to every token of a node or edge (zero-init). Node: MLP(RWSE+LapPE). Edge: MLP of its endpoints. **The proposed method.** | parser and alignment ported from GRL `graph-enc` (a3d3418) |
 | `abs-id` | absolute (additive) | Same architecture, with random per-node vectors redrawn every sample. **Identity control** (random, so not GraphToken's learned IDX). | |
 | `rel-bias` | relative (attention bias) | GTLM's SPD bias on top of the text: learned β[layer, head, bucket] added to the attention score of every pair of graph-element tokens; bucket = Levi-graph distance 0..8, >8, unreachable; 0 within one span occurrence (GTLM's b_SPD(u, u) = 0). Zero-init. | buckets as `DarioVajda/graph_model` @ f4feefb (`SPDBias`); `attention_bias.py` (FlexAttention) is ours |
+| `rel-bias-hilr` | relative (attention bias) | `rel-bias` with method lr 2e-2 (20x): bias-LR check, MetaQA HRM-1B only (at 1e-3 the learned β stayed at ~0.03) | GTLM's `bias_lr` is 5e-3 to 2e-2 |
 | `rel-bias-elem` | relative (attention bias) | Same, with buckets same element (other occurrence) / other element only. **Identity control.** | |
 
 On the knowledge graphs, `text-incident` groups the facts by subject (`Santa Sangre: written by Claudio Argento,

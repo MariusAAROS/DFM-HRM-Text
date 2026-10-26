@@ -4,7 +4,7 @@ title: Graph-Structure Injection on GraphQA, MetaQA and KQA Pro (graph_inject)
 description: Standalone package that fine-tunes HRM-Text-1B, DFM-Mimir v1 and v1.5 on GraphQA, MetaQA and KQA Pro with hard-prompt, soft-prompt, absolute-PE and relative-attention-bias graph injection under one LoRA trainer; design, verification, run matrix and results.
 tags: [graphs, graphqa, metaqa, kqapro, lora, soft-prompts, positional-encoding, attention-bias, hrm-text-1b, mimir]
 status: stable
-last_updated: 2026-10-24
+last_updated: 2026-10-25
 confidence: high
 ---
 # Graph-Structure Injection on GraphQA, MetaQA and KQA Pro
@@ -319,3 +319,83 @@ review:
   - no-graph-text prompts;
   - the rel-bias same-occurrence zero;
   - gradients for both faithful arms.
+
+## Interim: rel-bias on MetaQA, and the bias learning-rate check (2026-10-24)
+
+MetaQA test `greedy_acc` (seed 0; full test split, 1,197 samples; best epoch on the fixed 400-sample val subset):
+
+| | HRM-1B | Mimir v1 | Mimir v1.5 |
+| --- | ---: | ---: | ---: |
+| `text` | 0.865 | 0.875 | 0.877 |
+| `abs-pe` | 0.871 | **0.878** | 0.873 |
+| `abs-id` | 0.863 | 0.870 | 0.866 |
+| `rel-bias` | **0.871** | 0.870 | **0.881** |
+
+- **Pooled paired comparisons** over the 3 models:
+
+  | Comparison | Won / lost | p |
+  | --- | ---: | ---: |
+  | `rel-bias` vs `text` | +56 / −49 | 0.56 |
+  | `rel-bias` vs `abs-pe` | +60 / −60 | 1.00 |
+  | `rel-bias` vs `text`, 1-hop | +11 / −8 | 0.65 |
+  | `rel-bias` vs `text`, 2-hop | +17 / −19 | 0.87 |
+  | `rel-bias` vs `text`, 3-hop | +28 / −22 | 0.48 |
+
+- **3-hop stays at 0.756–0.776 for every method.**
+- **The learned bias barely moved from zero.** At the best epoch, mean |β| over layers and heads is 0.02–0.04 in
+  every distance bucket, for all 3 models, and the largest entry is 0.14–0.18 logits.
+  - The buckets are flat: distance 2 (adjacent nodes) is no different from "unreachable".
+  - With AdamW at the method lr of 1e-3 over about 3,000 steps, a consistent gradient sign would have moved β by
+    O(1). So the gradient on β has no consistent direction, and `rel-bias` at this lr is effectively the text model.
+- **Reference values from GTLM.** GTLM (`DarioVajda/graph_model` @ f4feefb) trains its biases in a separate
+  parameter group:
+  - `bias_lr` 5e-3 in its GraphQA defaults (`src/experiments/graphqa/__main__.py`), against LLM lr 3e-5, 20 epochs
+    and 32 samples per step;
+  - its bias sweeps (`src/experiments/bias_experiments/landmark/README.md`) pick 2e-2 in 8 of 9 cells, and note that
+    |b| grows roughly as `bias_lr` × steps.
+- **The check: `rel-bias-hilr`** (`configs/methods/rel-bias-hilr.yaml`, `method_lr: 2.0e-2`, 20× ours).
+  - Run: MetaQA, HRM-1B, seed 0, everything else as `rel-bias`. Queued ahead of the matrix on 2026-10-24.
+    `priority_rel_bias_hilr.sh` in the graph_inject output root waited for the running KQA Pro run, stopped the queue
+    between runs, ran the check, then restarted the queue.
+  - Outcomes:
+    - If β grows and the bucket profile becomes distance-dependent, but accuracy stays at `text`: the bias is used
+      but adds nothing over the graph text.
+    - If accuracy rises (3-hop above all) or β grows: the remaining `rel-bias` runs should use the higher lr.
+    - If β stays near 0 even at 2e-2: the text model has no use for the bias signal.
+  - **Result (2026-10-24, 17:05-18:39):**
+    - Test `greedy_acc` is 0.871, the same as `rel-bias` at 1e-3 (0.871). Paired: +27 / −28 vs `rel-bias` (p = 1.00),
+      and +19 / −12 vs `text` (p = 0.28).
+    - Per task (1-hop / 2-hop / 3-hop): 0.962 / 0.887 / 0.761, against `text` 0.950 / 0.892 / 0.751. On 3-hop that is
+      +9 / −5 vs `text` (p = 0.42).
+    - **β grew about 20×** (mean |β| 0.6, max 3.6; per head, the d = 1..8 range is 2.2 logits at the median), **but has
+      no distance structure.**
+      - Spearman correlation of β with distance over d = 1..8, per (layer, head): median 0.02, |ρ| > 0.7 for 5% of
+        heads. That is the chance rate for 8 random values.
+      - Head means are about 0 in every bucket.
+      - Isolated heads have spikes. For example, layer 10, head 4: +3.3 at d = 4, −1.6 at d = 5.
+    - **Reading:** with a large enough lr the bias is used, but it does not encode graph distance in any systematic
+      way, and accuracy does not move. The graph text already carries what the model uses. So the null result of
+      `rel-bias` is not an lr artifact. The remaining runs keep 1e-3, which keeps them comparable with the finished
+      ones.
+
+**Phase-2 results so far** (test `greedy_acc`, seed 0; HRM-1B / Mimir v1 / Mimir v1.5):
+
+| | GraphQA | MetaQA | KQA Pro |
+| --- | --- | --- | --- |
+| `text` | 0.829 / 0.857 / 0.842 | 0.865 / 0.875 / 0.877 | 0.739 / 0.742 / 0.748 |
+| `abs-pe` | 0.813 / 0.836 / 0.852 | 0.871 / 0.878 / 0.873 | 0.747 / 0.757 / 0.743 |
+| `rel-bias` | 0.821 / 0.842 / 0.844 | 0.871 / 0.870 / 0.881 | 0.731 / 0.753 / 0.741 |
+| `rel-bias-elem` | pending | 0.864 / 0.870 / 0.882 | running |
+
+Pooled `rel-bias` vs `text` (won / lost, p):
+
+| Dataset | Won / lost | p |
+| --- | ---: | ---: |
+| GraphQA | +18 / −26 | 0.29 |
+| MetaQA | +56 / −49 | 0.56 |
+| KQA Pro | +124 / −128 | 0.85 |
+
+- On MetaQA, `rel-bias` vs its identity control `rel-bias-elem` is +59 / −51 (p = 0.50).
+- The learned β stayed at |β| ≈ 0.03, flat, on all three datasets (HRM-1B).
+- KQA Pro Count is lower with `rel-bias` on all 3 models: 0.557 / 0.626 / 0.588, against 0.634 / 0.634 / 0.672.
+  That is about 40 test samples per model; noted, not tested.
