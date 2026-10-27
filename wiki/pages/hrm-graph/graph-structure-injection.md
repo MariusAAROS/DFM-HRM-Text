@@ -4,7 +4,7 @@ title: Graph-Structure Injection on GraphQA, MetaQA and KQA Pro (graph_inject)
 description: Standalone package that fine-tunes HRM-Text-1B, DFM-Mimir v1 and v1.5 on GraphQA, MetaQA and KQA Pro with hard-prompt, soft-prompt, absolute-PE and relative-attention-bias graph injection under one LoRA trainer; design, verification, run matrix and results.
 tags: [graphs, graphqa, metaqa, kqapro, lora, soft-prompts, positional-encoding, attention-bias, hrm-text-1b, mimir]
 status: stable
-last_updated: 2026-10-25
+last_updated: 2026-10-27
 confidence: high
 ---
 # Graph-Structure Injection on GraphQA, MetaQA and KQA Pro
@@ -13,6 +13,7 @@ The question is which way of injecting graph structure helps the pretrained mode
 DFM-Mimir v1.5) on GraphQA at small scale. The method families come from the user's survey of graph → LLM
 techniques: hard prompting, soft prompting, and embedding-level injection.
 
+- What each method is, its paper and its control: [Graph-Injection Methods](/pages/hrm-graph/graph-injection-methods.md).
 - Code: [`graph_inject/`](../../../graph_inject/README.md). It is standalone: `pretrain.py`, `models/` and the eval
   scripts are untouched and reused by import.
 - Tests: `tests/test_graph_inject.py`.
@@ -399,3 +400,113 @@ Pooled `rel-bias` vs `text` (won / lost, p):
 - The learned β stayed at |β| ≈ 0.03, flat, on all three datasets (HRM-1B).
 - KQA Pro Count is lower with `rel-bias` on all 3 models: 0.557 / 0.626 / 0.588, against 0.634 / 0.634 / 0.672.
   That is about 40 test samples per model; noted, not tested.
+
+## Interim effectiveness of all methods, and the GNN-encoder question (2026-10-26)
+
+All three datasets, seed 0, test `greedy_acc` (HRM-1B / Mimir v1 / Mimir v1.5). Δ is the mean change vs `text` over the
+models run. "Won / lost" counts test samples that flip relative to `text`, pooled over the models, with an exact
+binomial (McNemar) p. This supersedes the "pending" / "running" cells of the phase-2 table above.
+
+| Method | GraphQA | Δ, won / lost, p | MetaQA | Δ, won / lost, p | KQA Pro | Δ, won / lost, p |
+| --- | --- | --- | --- | --- | --- | --- |
+| `text` | 0.829 / 0.857 / 0.842 | reference | 0.865 / 0.875 / 0.877 | reference | 0.739 / 0.742 / 0.748 | reference |
+| `abs-pe` | 0.813 / 0.836 / 0.852 | −0.9, +19/−29, 0.19 | 0.871 / 0.878 / 0.873 | +0.2, +53/−46, 0.55 | 0.747 / 0.757 / 0.743 | +0.6, +128/−108, 0.22 |
+| `abs-id` | 0.826 / 0.836 / 0.855 | −0.3, +24/−28, 0.68 | 0.863 / 0.870 / 0.866 | −0.6, +42/−63, 0.05 | 0.749 / 0.739 / 0.750 | +0.3, +116/−106, 0.55 |
+| `rel-bias` | 0.821 / 0.842 / 0.844 | −0.7, +18/−26, 0.29 | 0.871 / 0.870 / 0.881 | +0.2, +56/−49, 0.56 | 0.731 / 0.753 / 0.741 | −0.1, +124/−128, 0.85 |
+| `rel-bias-elem` | 0.818 / 0.842 / 0.852 | −0.5, +19/−25, 0.45 | 0.864 / 0.870 / 0.882 | 0.0, +43/−44, 1.00 | 0.749 / 0.742 / 0.752 | +0.5, +115/−99, 0.31 |
+| `node-tokens` | 0.821 / 0.849 / 0.855 | −0.1, +23/−24, 1.00 | 0.863 / 0.873 / 0.873 | −0.3, +46/−55, 0.43 | 0.739 / 0.754 / 0.769 | **+1.1, +151/−113, 0.023** |
+| `graphtoken` | 0.813 / 0.849 / 0.844 | −0.7, +20/−28, 0.31 | 0.858 / 0.873 / 0.875 | −0.4, +48/−61, 0.25 | 0.732 / 0.754 / 0.753 | +0.4, +123/−111, 0.47 |
+| `prompt-tuning` (no graph) | 0.810 / 0.831 / 0.842 | **−1.5, +19/−36, 0.03** | 0.861 / 0.871 / 0.887 | +0.1, +57/−54, 0.85 | 0.735 / running / queued | HRM-1B: +40/−44 |
+| `graphtoken-frozen` | 0.709 / 0.787 / 0.805 | **−7.5, +16/−103, <0.001** | queued | | queued | |
+| `text-incident` | 0.834 / 0.842 / 0.831 | −0.7, +25/−33, 0.36 | queued | | queued | |
+| `fullft-text` | 0.847 / 0.839 / 0.829 | −0.4, +29/−34, 0.62 | queued | | queued | |
+
+- **No structural method beats `text` robustly.** Every method with an unfrozen LLM is within about ±1 pt of `text`. That
+  includes the no-graph control `prompt-tuning` on MetaQA (+0.1).
+  - **Only two results clearly lose:** `graphtoken-frozen` (−7.5, GraphQA) and `prompt-tuning` (−1.5, GraphQA).
+  - **The one nominal gain is `node-tokens` on KQA Pro** (+1.1, p = 0.023).
+    - It is driven by Verify (+19/−7, p = 0.029) and Qualifier (+23/−13, p = 0.13).
+    - About 25 tests have been run against `text`, so it does not survive a multiple-comparison correction (that would
+      need p ≲ 0.002).
+    - Against its identity control `abs-id` it is +146/−118 (p = 0.096), and against `abs-pe` +126/−108 (p = 0.27).
+    - Next: a second seed on KQA Pro for `text`, `node-tokens` and `abs-id` once the queue ends.
+- **The identity controls are not beaten either.**
+  - `abs-pe` beats `abs-id` only on MetaQA, and there it is because `abs-id` drops (−0.6), not because `abs-pe` gains.
+  - `rel-bias` vs `rel-bias-elem` on MetaQA is +59/−51 (p = 0.50).
+- **The hard cases do not move for any method:**
+  - MetaQA 3-hop: 0.75–0.78;
+  - GraphQA TriangleCounting and EdgeCount, which are the remaining GraphQA errors.
+- **Reading (medium confidence):** with the graph written in the prompt, LoRA on the text already gets what these
+  encodings could add. The faithful arms (frozen LLM, no graph text) are the open test, because there the structure
+  can only arrive through the method.
+
+**Why the GNN architecture is not the lever on the KGs.** The question asked was whether a Graph Transformer (for
+example GPS) should replace GraphToken's GIN.
+- **With the graph text kept**, the soft tokens are redundant with the text, so a stronger encoder has little room to
+  help. Not yet tested: zeroing the soft tokens at eval on the `graphtoken` checkpoints, which would show whether they
+  are used at all.
+- **In `graphtoken-faithful` on MetaQA and KQA Pro**, the encoder only sees anonymous topology.
+  - Nodes carry RWSE + LapPE + IDX features. There are no entity names and no relation types.
+  - `normalized_adjacency` / `batched_edge_index` make edges undirected.
+  - Example (MetaQA test): "when were the films written by David Morlet released", gold `2009`. The subgraph is a star
+    around `Mutants` with 8 facts.
+    - The answer node `2009` has the same features and the same position as `French`, `Horror` and the actors, so no
+      encoder can single it out.
+    - `written by` and `directed by` collapse into one duplicated edge.
+    - The LLM never sees the string `2009`.
+- **What would address it:** text-derived node and edge features, G-Retriever style. That means the LLM's
+  mean-pooled token embeddings of the entity and relation names, fed to a relation-aware encoder (GINE, or
+  TransformerConv with `edge_attr`). Per-node tokens (LLaGA style) are probably also needed so the answer string can
+  be decoded.
+- **A GPS arm** (PyG `GPSConv`: GINE + global attention on the same PEs) is worth trying only on GraphQA, where nodes
+  have no attributes. It is worth it only if `graphtoken-faithful` lags `text` mainly on the long-range tasks
+  (ShortestPath, Reachability, CycleCheck), since the 3-layer GIN sees only 3 hops.
+- **Decision:** wait for the remaining queue (about 50 runs at 2026-10-26 10:20, faithful arms last, estimated to end
+  2026-10-28 morning) before adding any arm.
+
+## Per-cell significance and the seed plan (2026-10-27)
+
+**Per-cell paired tests, seed 0.**
+- Every method was compared against `text` in each model × dataset cell: 96 comparisons, on per-sample test
+  `greedy_acc`, with a paired bootstrap 95% CI and an exact McNemar test.
+- The `text-colors`, `text-incident` and `graphtoken-frozen` KG cells and `fullft-text` on GraphQA are included;
+  the `-faithful` arms and the KG `fullft-text` runs were still queued.
+- **Typical 95% CI half-width of a difference:** about ±1 pt on MetaQA (n=1197), ±1.6 pt on KQA Pro (n=1134) and
+  ±2.2 pt on GraphQA (n=385).
+- **`graphtoken-frozen` is the only real effect.** It is significant in 8 of 9 cells and survives Bonferroni (p < 0.0005):
+
+  | Dataset | HRM-1B | Mimir v1 | Mimir v1.5 |
+  | --- | ---: | ---: | ---: |
+  | MetaQA | −5.9 | −5.0 | +0.0 (p = 1) |
+  | KQA Pro | −14.5 | −10.2 | −4.6 |
+  | GraphQA | −11.9 | −7.0 | −3.6 |
+
+- **The other 85 comparisons are consistent with chance.** 4 reach p < 0.05, about what 85 tests at α = 0.05 give,
+  none survives a correction, and their signs disagree:
+
+  | Dataset | Model | Method | Diff vs `text` (pt) | p |
+  | --- | --- | --- | ---: | ---: |
+  | MetaQA | HRM-1B | `text-colors` | +1.3 | 0.049 |
+  | KQA Pro | HRM-1B | `text-colors` | −2.8 | 0.006 |
+  | KQA Pro | Mimir v1.5 | `node-tokens` | +2.1 | 0.012 |
+  | GraphQA | Mimir v1 | `prompt-tuning` | −2.6 | 0.031 |
+
+- **These CIs cover only test-set sampling, not training noise.** In `graph_inject`, `seed` sets both the new modules'
+  init and the data order (`rng([seed, epoch])` in `train.py`). This differs from `pretrain.py` fine-tunes, where
+  only a reseeded dataset changes the run.
+
+**Seed plan.** This supersedes the 2026-10-26 "second seed on KQA Pro for `text`, `node-tokens`, `abs-id`".
+1. After the current queue: `SEEDS="1 2" METHODS="text"` on all 9 cells (about 15 h, estimated). This gives the
+   seed-to-seed sd of the baseline.
+2. Compare that sd with the observed gaps of 1–2 pt.
+   - sd ≲ 0.5 pt: the gaps may be partly real. Run seeds 1–2 for the 2–3 best candidates (for example
+     `node-tokens`, `text-incident`, `abs-pe`), about 15 h each.
+   - sd ≳ 1 pt: two single-seed runs of one method already differ by about 1.4 pt, so the gaps are noise. More seeds
+     are needed only for a multi-seed null claim.
+   - A full method × seed sweep (about 200 h) is not justified.
+
+**Fail: queue relaunched in a new SSH session without W&B credentials.**
+- **Symptom:** every run died at `wandb.init` with `UsageError: No API key configured`. `run_matrix.sh` logs `FAILED`
+  and moves on, so the queue would have gone through every remaining run in minutes.
+- **Fix:** `wandb login --host https://forge.coreweave.com`, then relaunch. Finished runs are skipped. Before a
+  relaunch, check that `wandb.Api().viewer` works.

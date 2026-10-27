@@ -1,6 +1,6 @@
 ---
 name: wiki-log
-description: Document work in this repo's OKF wiki, log-book style, under wiki/pages/hrm-graph/ - the implementation choices and why, what failed (symptom, cause, fix), what worked (verified numbers), in dated sections. First finds whether an existing page covers the topic and appends there; creates a new page only if none does. Use whenever the user asks to document, write up, log, record or "put in the wiki" an experiment, a fix, a result or a design decision, or at the end of a piece of work whose findings should survive the session, even if they don't say "wiki".
+description: Document work in this repo's OKF wiki, log-book style, under wiki/pages/hrm-graph/ - the implementation choices and why, what failed (symptom, cause, fix), what worked (verified numbers), in dated sections. First judges whether there is anything durable, new and consequential enough to record (and writes nothing if not), then finds whether an existing page covers the topic and appends there; creates a new page only if none does. Use whenever the user asks to document, write up, log, record or "put in the wiki" an experiment, a fix, a result or a design decision, or at the end of a piece of work whose findings should survive the session, even if they don't say "wiki".
 ---
 
 # Wiki log (hrm-graph)
@@ -9,6 +9,23 @@ The wiki (`wiki/`) is an OKF bundle; its rules are in `wiki/schema.md`. In this 
 `wiki/pages/hrm-graph/`. A page is a log book for one topic: a short header saying what the topic is and where
 its code/data/W&B live, then dated sections appended in chronological order. Readers come back to it weeks
 later to learn what was decided, what broke and what the numbers were, so write for that reader.
+
+## 0. Is there enough to record?
+
+Ask this first, honestly. A noisy wiki is worse than a short one: every line a reader has to skip makes the
+useful lines harder to find. Write only what passes all three tests:
+- **Durable**: still true and useful in a few weeks, not a snapshot that the next run will overwrite.
+- **New**: not already in the wiki, CLAUDE.md, the code, the configs or the git history. Check the target
+  page before writing.
+- **Consequential**: it changes what someone would do or conclude, for example a decision and its reason, a
+  failure that could happen again, a final or surprising number, a superseded claim.
+
+Usually not worth it: progress of running jobs, interim numbers that a pending run will replace, restating a
+config, routine success with nothing learned, and debugging steps that led nowhere.
+
+If nothing passes, write nothing. Tell the user in one or two lines why, and what would make it worth
+recording (e.g. "wait for the KQA Pro arms to finish, then log the full table"). If only part of it passes,
+record only that part.
 
 ## 1. Find the page
 
@@ -68,6 +85,9 @@ point to the new section.
 Links: repo files relative to the page (`../../../graph_inject/README.md`), other wiki pages bundle-relative
 (`/pages/hrm-graph/<page>.md`).
 
+Before saving, re-read the entry as that later reader would, and cut every line they would not miss:
+duplicates of the page above, narration of steps, and hedges with no information.
+
 ## 3. Housekeeping
 
 - Set `last_updated` in the page's frontmatter.
@@ -78,4 +98,5 @@ Links: repo files relative to the page (`../../../graph_inject/README.md`), othe
 - Run `.venv/bin/python scripts/validate_okf.py wiki` from the repo root; fix any error it reports for the
   pages you touched (the existing warnings on other pages are not yours).
 
-Reply with the page path, the section added and a 1-2 line summary of what was recorded.
+Reply with the page path, the section added and a 1-2 line summary of what was recorded, and what you
+left out as noise.
