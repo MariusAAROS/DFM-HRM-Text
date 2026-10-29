@@ -1,0 +1,6 @@
+# Diagnostic: TriangleCounting prompts also list the number of triangles through each node; only the sum and the
+# division by 3 are left to the model. Every other task reads the plain adjacency text.
+name: text-tri-hint
+kind: text
+encoding: tri_hint
+hint_tasks: [TriangleCounting]

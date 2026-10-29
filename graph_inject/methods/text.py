@@ -16,6 +16,13 @@
              (the repo divides by 255 first, which would name everything "lime"); only red, crimson, orange, lime,
              green and teal are reachable, exactly the names of the paper's Figure 5 example.
 
+Diagnostics of the unsaturated GraphQA tasks (wiki: graphqa-unsaturated-tasks), applied only to the prompts of
+`hint_tasks`, so every other task reads exactly the adjacency text:
+  edge_index        edges numbered in the text, "e1: (0, 1) e2: (0, 2) ...": the count is the last index (EdgeCount)
+  tri_hint          the adjacency text + the number of triangles through each node (TriangleCounting): only the sum
+                    and the division by 3 are left
+  response_format: tri_cot   the TriangleCounting target becomes the per-node counts, their sum, / 3, "Answer: <n>."
+
 Knowledge graphs (MetaQA, KQA Pro; graph.node_names is set):
   incident   no KG encoder exists in Talk like a Graph; ours groups the facts by subject, in order of first
              appearance, merging the objects of one relation (outgoing edges only, the graph is directed):
@@ -24,8 +31,10 @@ Knowledge graphs (MetaQA, KQA Pro; graph.node_names is set):
   colors     the same C-OWL block with entity names for node ids, 1-WL on the undirected entity graph
              (relation labels ignored, as in the paper).
 """
+import networkx as nx
+
 from graph_inject.methods.base import GraphMethod, GraphQASample
-from graph_inject.structure import PromptGraph, wl_labels
+from graph_inject.structure import EDGE_TUPLE, PromptGraph, wl_labels
 
 COLOR_INSTRUCTIONS = (
     "`<<COLORS>>` shows colors assigned based on WL label similarity. Colors capture the structural role of each "
@@ -119,6 +128,36 @@ def color_block(graph: PromptGraph, limit: int | None = None) -> str:
     return f"{kg.replace('among nodes', 'among entities')}<<COLORS>>\n{pairs}\n"
 
 
+EDGE_INDEX_NOTE = "The edges are numbered e1, e2, ... in the order they are listed.\n"
+
+
+def edge_index_text(text: str, start: int, end: int) -> str:
+    """Number the edge tuples of the description: "(0, 1) (0, 2)" -> "e1: (0, 1) e2: (0, 2)"."""
+    counter = iter(range(1, 1 << 20))
+    edges = EDGE_TUPLE.sub(lambda m: f"e{next(counter)}: {m.group()}", text[start:end])
+    return text[:start] + edges + EDGE_INDEX_NOTE + text[end:]
+
+
+def node_triangles(graph: PromptGraph) -> list[int]:
+    g = graph.to_networkx()
+    g.remove_edges_from(list(nx.selfloop_edges(g)))
+    tri = nx.triangles(g)
+    return [tri[v] for v in range(graph.nnodes)]
+
+
+def triangle_counts_text(counts: list[int]) -> str:
+    return "Triangles per node: " + ", ".join(f"node {v}: {c}" for v, c in enumerate(counts)) + "."
+
+
+def tri_cot_response(sample: GraphQASample) -> str:
+    counts = node_triangles(sample.graph)
+    total, answer = sum(counts), sample.response.strip().rstrip(".")
+    if total != 3 * int(answer):
+        raise ValueError(f"sample {sample.idx}: per-node triangles sum to {total}, gold is {answer}")
+    return (f"{triangle_counts_text(counts)} Sum: {total}. Each triangle is counted 3 times, so {total} / 3 = "
+            f"{total // 3}. Answer: {answer}.")
+
+
 # Prompt-token budget: every model's RoPE table has 4096 positions (max_seq_len), minus 96 generated tokens and the
 # chat-template tokens. Only text-colors on KQA Pro exceeds it (0.6% of prompts, up to 4,496 HRM tokens).
 PROMPT_TOKEN_BUDGET = 3990
@@ -143,12 +182,29 @@ class TextMethod(GraphMethod):
             excess = count(out) - PROMPT_TOKEN_BUDGET
         return out
 
+    def _hinted(self, sample: GraphQASample) -> bool:
+        return sample.task in self.cfg.get("hint_tasks", [])
+
+    def rewrite_response(self, sample: GraphQASample) -> str:
+        fmt = self.cfg.get("response_format")
+        if fmt is None or not self._hinted(sample):
+            return sample.response
+        if fmt == "tri_cot":
+            return tri_cot_response(sample)
+        raise ValueError(f"unknown response format {fmt}")
+
     def rewrite_prompt(self, sample: GraphQASample) -> str:
         enc = self.cfg.encoding
         text, g = sample.instruction, sample.graph
         start, end = g.description_span
         if enc == "adjacency":
             return text
+        if enc in ("edge_index", "tri_hint") and not self._hinted(sample):
+            return text
+        if enc == "edge_index":
+            return edge_index_text(text, start, end)
+        if enc == "tri_hint":
+            return text[:end] + triangle_counts_text(node_triangles(g)) + "\n" + text[end:]
         if enc == "incident" and g.node_names is not None:
             return text[:start] + kg_incident_encoder(g, text[start:end]) + text[end:]
         if enc == "incident":

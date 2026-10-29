@@ -5,7 +5,7 @@ prompt, insert soft-token slots, or need the token -> graph-element alignment. T
 data_io's (tests/test_graph_inject.py checks all train rows against data/graphs/tokenized/).
 """
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 import torch
@@ -32,7 +32,7 @@ class EncodedSample:
 
 
 def parse_graph(text: str, dataset: str) -> PromptGraph:
-    return parse_graphqa(text) if dataset == "graphqa" else parse_kg_facts(text, dataset)
+    return parse_graphqa(text) if dataset.startswith("graphqa") else parse_kg_facts(text, dataset)
 
 
 def load_samples(path: str, dataset: str = "graphqa", limit: int | None = None) -> list[GraphQASample]:
@@ -64,6 +64,7 @@ def stratified_subset(samples: list, n: int, seed: int = 0) -> list:
 def encode_samples(samples: list[GraphQASample], method: GraphMethod, tokenizer: PromptTokenizer) -> list[EncodedSample]:
     out = []
     for s in samples:
+        s = replace(s, response=method.rewrite_response(s))  # the scoring gold is the rewritten response too
         prompt = method.rewrite_prompt(s)
         char_elements = char_spans = None
         if method.needs_elements:

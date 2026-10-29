@@ -3,6 +3,7 @@
 A method touches the pipeline at four points:
 
   rewrite_prompt(sample)       hard prompting: change the text the LLM reads (default: unchanged)
+  rewrite_response(sample)     change the supervised target, e.g. a chain of thought ending in "Answer: <gold>"
   num_soft_tokens(sample)      soft prompting: placeholder slots inserted before the prompt content
   featurize(sample)            per-sample graph features, computed once on CPU (numpy)
   collate(items, rng)          per-batch tensors, keys prefixed "graph_"; rng is None at eval (deterministic)
@@ -66,6 +67,9 @@ class GraphMethod(nn.Module):
             return sample.instruction
         start, end = sample.graph.description_span
         return sample.instruction[:start] + sample.instruction[end:]
+
+    def rewrite_response(self, sample: GraphQASample) -> str:
+        return sample.response
 
     def num_soft_tokens(self, sample: GraphQASample) -> int:
         return 0

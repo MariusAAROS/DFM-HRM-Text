@@ -1,0 +1,9 @@
+# Diagnostic: the TriangleCounting target is a chain of thought, per-node triangle counts, their sum, / 3, then
+# "Answer: <n>." (greedy_acc compares the part after "Answer:"). Compare with text-tri-hint: computing the per-node
+# counts vs adding them up. Every other task is unchanged. The CoT is at most ~150 tokens (19 nodes).
+name: text-tri-cot
+kind: text
+encoding: adjacency
+hint_tasks: [TriangleCounting]
+response_format: tri_cot
+train: {eval: {max_generation: 256}}

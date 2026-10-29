@@ -27,6 +27,7 @@ eval_graphqa = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(eval_graphqa)  # pyright: ignore[reportOptionalMemberAccess]
 
 UNANSWERABLE_TASKS = ("MaximumFlow",)
+ANSWER_MARKER = "Answer:"
 
 
 def _prefill_batch(sample: EncodedSample, method: GraphMethod, cache_slice, device) -> dict:
@@ -83,6 +84,11 @@ def generate(model, carry, method: GraphMethod, samples: list[EncodedSample], st
     return [results[j] for j in range(len(samples))]
 
 
+def final_answer(text: str, gold: str) -> str:
+    """Chain-of-thought targets end in "Answer: <x>": greedy_acc compares only <x> (tf_em stays on the full text)."""
+    return text.rsplit(ANSWER_MARKER, 1)[-1] if ANSWER_MARKER in gold else text
+
+
 def score(samples: list[EncodedSample], generations: list[list[int]], decode, stop_id: int) -> dict:
     """eval_graphqa.py's metrics; `decode(ids)` turns generated ids (stop token removed) into text."""
     per_task = defaultdict(lambda: [0, 0])
@@ -90,7 +96,7 @@ def score(samples: list[EncodedSample], generations: list[list[int]], decode, st
     for s, ids in zip(samples, generations):
         text_ids = ids[:-1] if ids and ids[-1] == stop_id else ids
         pred, gold = decode(text_ids), s.sample.response
-        acc = eval_graphqa.normalize(pred) == eval_graphqa.normalize(gold)
+        acc = eval_graphqa.normalize(final_answer(pred, gold)) == eval_graphqa.normalize(final_answer(gold, gold))
         em = pred.startswith(gold)
         tf = ids[:len(s.gold_ids)] == s.gold_ids
         p, r, f1, hits1 = eval_graphqa.set_scores(pred, gold)

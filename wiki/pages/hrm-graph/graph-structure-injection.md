@@ -99,6 +99,10 @@ DFM-Mimir v1.5). The method families come from the user's survey of graph → LL
   hence the `abs-id` and `prompt-tuning` controls.
 - **Paired test error.** The typical 95% CI half-width of a method − `text` difference is about ±2.2 pt on GraphQA,
   ±1 pt on MetaQA and ±1.6 pt on KQA Pro. Training-seed noise comes on top of that (see Next).
+- **GraphQA duplicates:** 61 of 385 test (and 78 of 385 val) prompts are identical to a train prompt, inherited from
+  the raw split. Clean-subset numbers are in [Unsaturated GraphQA Tasks](/pages/hrm-graph/graphqa-unsaturated-tasks.md).
+- **MaximumFlow capacities were dropped upstream:** the gold answers imply random 1–10 capacities per edge, which no
+  prompt prints (same page).
 - **Prior result:** in GRL `graph-enc`, gated node and WL embeddings under full FT gave no gain, and the gate stayed
   at about 0.002.
 

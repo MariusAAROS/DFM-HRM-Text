@@ -234,6 +234,66 @@ def test_colors_fit_context():
     assert 0 < truncated < 20
 
 
+V2 = GRAPHQA / "hrm-text-grl-v2/standard"
+
+
+@pytest.mark.skipif(not V2.exists(), reason="run scripts/graph_inject/build_graphqa_v2.py")
+def test_graphqa_v2_maxflow_and_dedup():
+    """v2: MaximumFlow capacities in 1-10 are printed and the gold is the max flow of the printed graph; no val/test
+    prompt is a train prompt; every other row is unchanged."""
+    import networkx as nx
+    from graph_inject.data import load_samples
+    v2 = {k: [json.loads(line) for line in open(V2 / f"{k}.jsonl")] for k in ("train", "val", "test")}
+    assert (len(v2["train"]), len(v2["val"]), len(v2["test"])) == (3080, 307, 324)
+    old_train = {r["instruction"] for r in rows("train")}
+    assert not any(r["instruction"] in old_train for k in ("val", "test") for r in v2[k])
+    report = json.load(open(V2 / "dedup_report.json"))
+    old_test = rows("test")
+    for r, i in zip(v2["test"], report["test"]["kept_ids"]):
+        assert r["task"] == old_test[i]["task"] and (r["task"] == "MaximumFlow" or r == old_test[i])
+    for s in load_samples(str(V2 / "test.jsonl"), "graphqa_v2"):
+        if s.task != "MaximumFlow":
+            continue
+        caps = [int(c) for c in __import__("re").findall(r"\(\d+, \d+, (\d+)\)", s.instruction)]
+        assert len(caps) == len(s.graph.edges) and all(1 <= c <= 10 for c in caps)
+        g = nx.Graph()
+        g.add_nodes_from(range(s.graph.nnodes))
+        g.add_edges_from((u, v, {"capacity": c}) for (u, v), c in zip(s.graph.edges, caps) if u != v)
+        src, dst = s.graph.question_nodes()[:2]
+        flow = nx.maximum_flow_value(g, src, dst) if nx.has_path(g, src, dst) else 0
+        assert s.response.strip().rstrip(".") == str(int(flow))
+
+
+def test_unsaturated_task_diagnostics():
+    """edge_index / tri_hint / tri_cot touch only their task; the edge numbering ends at the gold edge count, the
+    per-node triangle counts sum to 3x the gold, and the prompts still parse to the same graph."""
+    from graph_inject.data import load_samples
+    from graph_inject.generate import final_answer
+    from graph_inject.methods import build_method
+    samples = load_samples(str(GRAPHQA / "hrm-text-grl/standard/train.jsonl"))
+    for name, task in (("text-edge-index", "EdgeCount"), ("text-tri-hint", "TriangleCounting"),
+                       ("text-tri-cot", "TriangleCounting")):
+        cfg = OmegaConf.load(REPO / f"graph_inject/configs/methods/{name}.yaml")
+        cfg.pop("train", None)
+        method = build_method(cfg, 1536, 1.0)
+        for s in samples:
+            prompt, response = method.rewrite_prompt(s), method.rewrite_response(s)
+            if s.task != task:
+                assert prompt == s.instruction and response == s.response
+                continue
+            assert parse_graphqa(prompt).edges == s.graph.edges
+            gold = int(s.response.strip().rstrip("."))
+            if name == "text-edge-index":
+                assert f"e{gold}: (" in prompt and f"e{gold + 1}: (" not in prompt
+            elif name == "text-tri-hint":
+                counts = [int(c) for c in __import__("re").findall(r"node \d+: (\d+)", prompt.split("Triangles per node:")[1])]
+                assert len(counts) == s.graph.nnodes and sum(counts) == 3 * gold
+            else:
+                assert response.endswith(f"Answer: {gold}.")
+                assert final_answer(response, response).strip() == f"{gold}."
+    assert final_answer("node 0: 1. Answer: 7.", "x Answer: 7.") == " 7." and final_answer(" 7.", " 7.") == " 7."
+
+
 def test_graphtoken_query_readout_empty_graph():
     """graphtoken-faithful at a single-prompt prefill of a KQA Pro prompt without facts (0 nodes)."""
     from graph_inject.data import encode_samples, load_samples

@@ -1,0 +1,6 @@
+# Diagnostic: EdgeCount prompts number their edges ("e1: (0, 1) e2: ..."), so the count is the last index. Every other
+# task reads the plain adjacency text. Saturating EdgeCount here means counting, not structure, was the bottleneck.
+name: text-edge-index
+kind: text
+encoding: edge_index
+hint_tasks: [EdgeCount]

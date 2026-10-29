@@ -1,0 +1,10 @@
+# GraphQA v2 (scripts/graph_inject/build_graphqa_v2.py): MaximumFlow with printed edge capacities (gold recomputed),
+# val/test without the rows that duplicate a train prompt (test 324, val 307). Same recipe as graphqa.yaml.
+dataset: graphqa_v2
+epochs: 10
+data:
+  train: data/graphs/graphqa/hrm-text-grl-v2/standard/train.jsonl
+  val: data/graphs/graphqa/hrm-text-grl-v2/standard/val.jsonl
+  test: data/graphs/graphqa/hrm-text-grl-v2/standard/test.jsonl
+out_root: /work/dfm/marius-ortega/dfm-hrm-graphs/graph_inject_graphqa_v2
+wandb: {group: graphqa-v2-inject}
