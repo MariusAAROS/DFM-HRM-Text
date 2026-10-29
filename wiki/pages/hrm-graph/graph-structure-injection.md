@@ -4,7 +4,7 @@ title: Graph-Structure Injection on GraphQA, MetaQA and KQA Pro (graph_inject)
 description: Standalone package that fine-tunes HRM-Text-1B, DFM-Mimir v1 and v1.5 on GraphQA, MetaQA and KQA Pro with hard-prompt, soft-prompt, absolute-PE and relative-attention-bias graph injection under one LoRA trainer; design, verification, results and fixes.
 tags: [graphs, graphqa, metaqa, kqapro, lora, soft-prompts, positional-encoding, attention-bias, hrm-text-1b, mimir]
 status: stable
-last_updated: 2026-10-28
+last_updated: 2026-10-29
 confidence: high
 ---
 # Graph-Structure Injection on GraphQA, MetaQA and KQA Pro
@@ -220,13 +220,40 @@ papers and official code. Ten minor items (N1–N10) remain and are documented i
 - **Fix:** `wandb login --host https://forge.coreweave.com`, check that `wandb.Api().viewer` works, then relaunch.
   Finished runs are skipped.
 
-## Next: seed variance (planned 2026-10-27)
+## Seed variance of `text` (2026-10-29)
 
-1. **Running since 2026-10-28 08:55:** `SEEDS="1 2" METHODS=text` on all 9 cells. That is 18 runs, about 15 h
-   (estimated), logged to `/work/dfm/marius-ortega/dfm-hrm-graphs/graph_inject/queue_seeds.log`. It gives the
-   baseline's seed-to-seed sd.
-2. **Then compare that sd with the 1–2 pt gaps.**
-   - If sd ≲ 0.5 pt, run seeds 1–2 for the 2–3 best candidates (`node-tokens`, `text-incident`, `abs-pe`), about
-     15 h each.
-   - If sd ≳ 1 pt, the gaps are noise, and more seeds only serve a multi-seed null claim.
-   - A full method × seed sweep (about 200 h) is not justified.
+`text` was rerun with seeds 1 and 2 on all 9 cells (2026-10-28 08:55 to 23:46, no failures). Test `greedy_acc` in
+points:
+
+| Dataset | HRM-1B (s0 / s1 / s2) | Mimir v1 | Mimir v1.5 | Pooled seed sd |
+| --- | --- | --- | --- | ---: |
+| GraphQA | 82.9 / 81.6 / 83.4 | 85.7 / 82.9 / 83.9 | 84.2 / 85.5 / 85.7 | 1.1 |
+| MetaQA | 86.5 / 87.5 / 86.5 | 87.5 / 86.7 / 87.2 | 87.7 / 87.8 / 88.7 | 0.5 |
+| KQA Pro | 73.9 / 74.9 / 73.5 | 74.2 / 75.0 / 75.3 | 74.8 / 76.4 / 74.8 | 0.75 |
+
+- **This is training noise only.** The test set is fixed, so the spread comes from the init and the data order.
+  Changing only the seed moves one run by up to 2.9 pt (GraphQA, Mimir v1). The best epoch also moves: on GraphQA it
+  was 8–9 for seed 0 and 4 for seed 1.
+- **Every seed-0 method is now compared with the 3-seed `text` mean.**
+  - Δ is averaged over the 3 models.
+  - z = Δ / (sd·√(4/3)/√3) uses the dataset's pooled seed sd: one method run against a 3-seed mean, over 3
+    models.
+  - Leaving out the arms that clearly lose (frozen, faithful, KG `fullft-text`), the largest effects are:
+
+  | Method | GraphQA Δ (z) | MetaQA Δ (z) | KQA Pro Δ (z) |
+  | --- | ---: | ---: | ---: |
+  | `text-incident` | −0.4 (−0.5) | +0.4 (+1.3) | +0.6 (+1.1) |
+  | `node-tokens` | +0.2 (+0.3) | −0.4 (−1.1) | +0.6 (+1.3) |
+  | `abs-pe` | −0.6 (−0.8) | +0.1 (+0.2) | +0.1 (+0.2) |
+  | `prompt-tuning` (no graph) | −1.2 (−1.6) | 0.0 (−0.1) | −0.8 (−1.6) |
+  | `abs-id` (control) | −0.1 (−0.1) | −0.7 (−2.1) | −0.2 (−0.4) |
+
+  - No LoRA arm reaches |z| > 2 except `abs-id` on MetaQA (−2.1), which is one of 33 tests.
+  - The `node-tokens` KQA Pro gain shrinks from +1.1 against seed 0 to +0.6 against the 3-seed mean.
+- **Conclusion.** The seed sd is ≳ 1 pt on GraphQA and about 0.5–0.75 on the KGs, and no LoRA method moves more than
+  ±1.2 pt on average. **Structural injection does not measurably improve on `text` + LoRA** for these models and
+  datasets. The negative effects (frozen LLM, no graph text, KG full fine-tuning) are 4–75 pt, far outside the
+  noise.
+- **The one consistent pattern is `text-incident` on the KGs.** It is above the 3-seed `text` mean in all 6 KG cells
+  (+0.1 to +0.9; a sign test gives p = 0.03), but below it on GraphQA. It is the only candidate a seeds-1–2 check
+  could confirm. That check is 12 runs, about 10 h (estimated from the seed-0 run times). Not run.
