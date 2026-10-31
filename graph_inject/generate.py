@@ -40,10 +40,14 @@ def _prefill_batch(sample: EncodedSample, method: GraphMethod, cache_slice, devi
 
 @torch.inference_mode()
 def generate(model, carry, method: GraphMethod, samples: list[EncodedSample], stop_id: int,
-             max_generation: int = 96, batch_size: int = 16) -> list[list[int]]:
-    """Greedy generations (token ids incl. the stop token if reached), in sample order."""
+             max_generation: int = 96, batch_size: int = 16, max_seq_len: int | None = None) -> list[list[int]]:
+    """Greedy generations (token ids incl. the stop token if reached), in sample order. With max_seq_len, a sample
+    also stops when prompt + generated tokens reach it (the RoPE table: long chains of thought after long prompts)."""
     device = next(model.parameters()).device
     max_tokens = max(len(s.prompt.ids) for s in samples) + max_generation + 1
+    if max_seq_len is not None:
+        max_tokens = min(max_tokens, max_seq_len)
+    limit = [min(max_generation, max_tokens - len(s.prompt.ids)) for s in samples]
     cache = model.create_cache(max_batch_size=batch_size, max_seq_len=max_tokens, dtype=torch.bfloat16, device=device)
     cache_lengths = torch.zeros(batch_size, dtype=torch.int32, device=device)
     last = torch.zeros(batch_size, dtype=torch.long, device=device)
@@ -66,7 +70,7 @@ def generate(model, carry, method: GraphMethod, samples: list[EncodedSample], st
             token = int(model(carry=carry, batch=batch)[-1][0, -1].argmax())
             last[i], cache_lengths[i] = token, len(s.prompt.ids)
             slot_sample[i], generated[i] = j, [token]
-            stopped[i] = token == stop_id or max_generation == 1
+            stopped[i] = token == stop_id or limit[j] == 1
         if stopped.all():
             if not queue:
                 break
@@ -77,7 +81,7 @@ def generate(model, carry, method: GraphMethod, samples: list[EncodedSample], st
         tokens_np = tokens.cpu().numpy()
         for i in np.nonzero(~stopped)[0]:
             generated[i].append(int(tokens_np[i]))
-            stopped[i] = tokens_np[i] == stop_id or len(generated[i]) >= max_generation
+            stopped[i] = tokens_np[i] == stop_id or len(generated[i]) >= limit[slot_sample[i]]
     for i, j in enumerate(slot_sample):  # prompts that stopped at their prefill token
         if j != -1:
             results[j] = generated[i]
@@ -99,7 +103,7 @@ def score(samples: list[EncodedSample], generations: list[list[int]], decode, st
         acc = eval_graphqa.normalize(final_answer(pred, gold)) == eval_graphqa.normalize(final_answer(gold, gold))
         em = pred.startswith(gold)
         tf = ids[:len(s.gold_ids)] == s.gold_ids
-        p, r, f1, hits1 = eval_graphqa.set_scores(pred, gold)
+        p, r, f1, hits1 = eval_graphqa.set_scores(final_answer(pred, gold), final_answer(gold, gold))
         per_task[s.sample.task][0] += int(acc)
         per_task[s.sample.task][1] += 1
         for k, v in (("greedy_acc", acc), ("greedy_em", em), ("tf_em", tf), ("precision", p), ("recall", r),

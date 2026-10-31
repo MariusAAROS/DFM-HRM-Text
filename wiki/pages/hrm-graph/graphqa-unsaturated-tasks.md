@@ -4,7 +4,7 @@ title: Unsaturated GraphQA Tasks
 description: Which GraphQA subtasks are not saturated under graph_inject (EdgeCount, TriangleCounting, MaximumFlow, NodeDegree), why (train/test duplicates, missing max-flow capacities, counting and multi-term arithmetic), and the diagnostic runs (printed capacities, numbered edges, triangle hint, triangle CoT).
 tags: [graphs, graphqa, evaluation, data-quality, counting, chain-of-thought, hrm-text-1b, mimir]
 status: stable
-last_updated: 2026-10-29
+last_updated: 2026-10-30
 confidence: high
 ---
 # Unsaturated GraphQA Tasks
@@ -246,3 +246,9 @@ Untouched tasks move by up to 4 questions (MaxFlow 0.50–0.71), which is the si
   - per node, its neighbour list and the connected pairs instead of a bare count.
 
   The full triangle list was ruled out earlier for length.
+
+## Follow-up: all-task chain of thought (2026-10-30)
+
+The CoT design rule above was applied to every task in `graphqa_v2_cot`: see
+[GraphQA Chain of Thought](/pages/hrm-graph/graphqa-cot.md). It reaches 0.910 / 0.944 / 0.966 test greedy_acc, with
+TriangleCounting at 0.56–0.78 and MaximumFlow at 0.56–0.85.

@@ -7,7 +7,8 @@
              Copied from the google-research encoders as ported in Graph-Representation-Learning-for-LLM
              src/datasets/graphqa/graph_text_encoders.py (incident_encoder, create_node_string). Neighbours come
              in edge-list order (TLAG: the generator graph's insertion order); not checked against GraphQA's own
-             incident files, which are not on disk.
+             incident files, which are not on disk. Edges with a capacity (graphqa_v2 MaximumFlow) keep it:
+             "Node 0 is connected to nodes 1 (10), 2 (1)." (TLAG has no capacity variant).
   colors     Colorful Talks (Zangari et al., Findings of ACL 2026, arXiv 2602.10386), C-OWL variant (colours only;
              the paper's CL-OWL adds the WL labels): ordered 1-WL labels, min-max normalized to a hue in [0, 180]
              degrees and named, listed in a <<COLORS>> block after the adjacency text, with the paper's Figure 5
@@ -78,13 +79,18 @@ def create_node_string(nnodes: int) -> str:
     return "".join(f"{i}, " for i in range(nnodes - 1)) + f"and {nnodes - 1}"
 
 
-def incident_encoder(graph: PromptGraph) -> str:
+def incident_encoder(graph: PromptGraph, capacities: dict[tuple[int, int], int] | None = None) -> str:
     output = "G describes a graph among nodes %s.\n" % create_node_string(graph.nnodes)
+    if capacities:
+        output = ("In an undirected graph, the number in brackets after a neighbor is the capacity of the edge. "
+                  + output)
     if graph.edges:
         output += "In this graph:\n"
     nx_graph = graph.to_networkx()
     for source in nx_graph.nodes():
         targets = [str(t) for t in nx_graph.neighbors(source)]
+        if capacities:
+            targets = [f"{t} ({capacities[tuple(sorted((source, int(t))))]})" for t in targets]
         if len(targets) > 1:
             output += "Node %s is connected to nodes %s.\n" % (source, ", ".join(targets))
         elif len(targets) == 1:
@@ -208,7 +214,9 @@ class TextMethod(GraphMethod):
         if enc == "incident" and g.node_names is not None:
             return text[:start] + kg_incident_encoder(g, text[start:end]) + text[end:]
         if enc == "incident":
-            return text[:start] + incident_encoder(g) + text[end:]
+            caps = {tuple(sorted((int(m[1]), int(m[2])))): int(m[3])
+                    for m in EDGE_TUPLE.finditer(text, start, end) if m[3] is not None}
+            return text[:start] + incident_encoder(g, caps) + text[end:]
         if enc == "colors":
             return self._fit_colors(text, end, g)
         raise ValueError(f"unknown text encoding {enc}")

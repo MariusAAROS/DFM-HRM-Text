@@ -1,0 +1,15 @@
+# GraphQA v2 with a chain-of-thought target for every task (scripts/graph_inject/build_graphqa_cot.py,
+# graph_inject/cot.py): same prompts and splits as graphqa_v2, responses are decomposed traces ending in "Answer: <gold>".
+# Traces reach ~2,700 tokens, so generation stops at the 4,096 RoPE positions (max_seq_len) and the eval batch is 8
+# (KV cache, as KQA Pro); the best epoch is picked on val greedy_acc (tf_em would need the whole trace verbatim).
+# Decoding runs at ~0.14 s per step (batch 8), so a full val pass would take ~30 min per epoch: epoch selection uses a
+# fixed, task-stratified 55-question val subset (5 per task); test is complete.
+dataset: graphqa_v2_cot
+epochs: 10
+eval: {batch_size: 8, max_generation: 3000, max_seq_len: 4096, select_metric: greedy_acc, val_subset: 55}
+data:
+  train: data/graphs/graphqa/hrm-text-grl-v2-cot/standard/train.jsonl
+  val: data/graphs/graphqa/hrm-text-grl-v2-cot/standard/val.jsonl
+  test: data/graphs/graphqa/hrm-text-grl-v2-cot/standard/test.jsonl
+out_root: /work/dfm/marius-ortega/dfm-hrm-graphs/graph_inject_graphqa_v2_cot
+wandb: {group: graphqa-v2-cot-inject}

@@ -5,6 +5,7 @@ prompt, insert soft-token slots, or need the token -> graph-element alignment. T
 data_io's (tests/test_graph_inject.py checks all train rows against data/graphs/tokenized/).
 """
 import json
+from collections import Counter
 from dataclasses import dataclass, replace
 
 import numpy as np
@@ -80,6 +81,31 @@ def encode_samples(samples: list[GraphQASample], method: GraphMethod, tokenizer:
             gold_ids=tokenizer.gold_answer_ids(s.response),
             features=method.featurize(s)))
     return out
+
+
+def fit_cot_window(encoded: list[EncodedSample], method: GraphMethod, tokenizer: PromptTokenizer,
+                   max_len: int) -> tuple[list[EncodedSample], Counter]:
+    """Chain-of-thought rows whose prompt + trace exceed max_len with this method's prompt (longer than the adjacency
+    text the dataset builder checked: text-incident, node-tokens) take the next coarser trace detail, as
+    build_graphqa_cot.py does. Returns the samples and a count of (task, final detail) per changed row; a row that
+    does not fit at the coarsest detail keeps it (train.py refuses such a train row; generation stops at max_len)."""
+    from graph_inject.cot import DETAILS, cot_response
+    from graph_inject.generate import ANSWER_MARKER
+    out, changed = [], Counter()
+    for e in encoded:
+        s = e.sample
+        if e.train_length + 1 > max_len and s.task in DETAILS and ANSWER_MARKER in s.response:
+            gold = s.response.rsplit(ANSWER_MARKER, 1)[1].strip()
+            prompt = method.rewrite_prompt(s)
+            for detail in DETAILS[s.task][1:]:  # lengths shrink with the detail: the first that fits
+                s = replace(e.sample, response=cot_response(s.instruction, s.task, gold, detail)[0])
+                e = replace(e, sample=s, response_ids=tokenizer.encode_response(s.condition, prompt, s.response),
+                            gold_ids=tokenizer.gold_answer_ids(s.response))
+                if e.train_length + 1 <= max_len:
+                    break
+            changed[(s.task, detail)] += 1
+        out.append(e)
+    return out, changed
 
 
 def pack_batches(samples: list[EncodedSample], max_tokens: int, rng: np.random.Generator,

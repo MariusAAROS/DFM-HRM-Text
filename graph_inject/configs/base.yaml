@@ -16,6 +16,8 @@ tokens_per_step: 8192     # packed PrefixLM batch, as cfg_graphqa_hrm1b
 samples_per_step: null    # also cap the samples per batch (the no-graph-text arms: short prompts, else few steps)
 max_steps: null           # stop early (benchmarks / smoke tests)
 log_every: 10
-eval: {max_generation: 96, batch_size: 16, val_subset: null, limit: null}  # val_subset: N val samples per epoch
+# val_subset: N val samples per epoch; select_metric: the val metric that picks the best epoch (greedy_acc for chains of
+# thought, where tf_em needs the whole trace verbatim); max_seq_len: stop generating at prompt + generated tokens.
+eval: {max_generation: 96, batch_size: 16, val_subset: null, limit: null, select_metric: tf_em, max_seq_len: null}
 data: {limit: null}       # first N rows of every split (smoke runs)
 wandb: {project: Graph-Positional-Encoding-Exploration, mode: online}

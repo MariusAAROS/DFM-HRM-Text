@@ -11,8 +11,8 @@ simple_inference_engine.inference_load_checkpoint (bf16). Regimes:
   frozen  base frozen, only the method's modules train (original GraphToken setting)
   full    every weight trains: fp32 params under bf16 autocast (trainer check against pretrain.py)
 
-Every epoch: greedy generation on val (eval_graphqa metrics). The best epoch by val tf_em (ties: earliest,
-as scripts/graphs/run_graphqa_hrm1b.sh) is evaluated on test. Outputs in <out_root>/<model>/<method>_s<seed>/
+Every epoch: greedy generation on val (eval_graphqa metrics). The best epoch by val tf_em (eval.select_metric; ties:
+earliest, as scripts/graphs/run_graphqa_hrm1b.sh) is evaluated on test. Outputs in <out_root>/<model>/<method>_s<seed>/
 (one out_root per dataset):
 config.yaml, eval_val_ep<N>.json, eval_test.json, best_trainable.pt (trainable params only).
 """
@@ -28,8 +28,8 @@ import torch
 import wandb
 from omegaconf import OmegaConf
 
-from graph_inject.data import (EncodedSample, encode_samples, load_samples, pack_batches, stratified_subset,
-                               to_device_prefixlm, train_batch)
+from graph_inject.data import (EncodedSample, encode_samples, fit_cot_window, load_samples, pack_batches,
+                               stratified_subset, to_device_prefixlm, train_batch)
 from graph_inject.generate import generate, score
 from graph_inject.lora import apply_lora
 from graph_inject.methods import build_method
@@ -93,7 +93,8 @@ def evaluate(cfg, ckpt, model, samples: list[EncodedSample], autocast) -> dict:
     model.eval()
     with autocast():
         gens = generate(model, ckpt.carry, model.method, samples, stop_id,
-                        max_generation=cfg.eval.max_generation, batch_size=cfg.eval.batch_size)
+                        max_generation=cfg.eval.max_generation, batch_size=cfg.eval.batch_size,
+                        max_seq_len=cfg.eval.max_seq_len)
     model.train()
     return score(samples, gens, lambda ids: ckpt.tokenizer.decode(ids), stop_id)
 
@@ -130,6 +131,15 @@ def main(argv: list[str]):
     t0 = time.time()
     splits = {k: encode_samples(load_samples(cfg.data[k], cfg.dataset, cfg.data.limit), model.method, tokenizer)
               for k in ("train", "val", "test")}
+    if cfg.eval.max_seq_len:  # chain-of-thought rows too long for this method's prompt take a coarser trace
+        for k in splits:
+            splits[k], changed = fit_cot_window(splits[k], model.method, tokenizer, cfg.eval.max_seq_len)
+            if changed:
+                print(f"{k}: coarser CoT detail to fit {cfg.eval.max_seq_len} tokens: "
+                      + ", ".join(f"{t}/{d} {n}" for (t, d), n in sorted(changed.items())), flush=True)
+        too_long = [s.sample.idx for s in splits["train"] if s.train_length + 1 > cfg.eval.max_seq_len]
+        if too_long:
+            raise ValueError(f"train rows {too_long} exceed {cfg.eval.max_seq_len} tokens at the coarsest detail")
     if cfg.eval.val_subset:  # epoch selection on a fixed, task-stratified val subset; test stays complete
         splits["val"] = stratified_subset(splits["val"], cfg.eval.val_subset)
     if cfg.eval.limit:
@@ -177,8 +187,9 @@ def main(argv: list[str]):
         with open(os.path.join(out_dir, f"eval_val_ep{epoch}.json"), "w") as f:
             json.dump(report, f, indent=1)
         log_eval("val", report, step)
-        if best is None or report["tf_em"] > best["tf_em"]:
-            best = {"epoch": epoch, "tf_em": report["tf_em"], "state": trainable_state(model)}
+        select = cfg.eval.select_metric
+        if best is None or report[select] > best[select]:
+            best = {"epoch": epoch, select: report[select], "state": trainable_state(model)}
             torch.save(best["state"], os.path.join(out_dir, "best_trainable.pt"))
         if cfg.max_steps and step >= cfg.max_steps:
             break

@@ -264,6 +264,28 @@ def test_graphqa_v2_maxflow_and_dedup():
         assert s.response.strip().rstrip(".") == str(int(flow))
 
 
+@pytest.mark.skipif(not V2.exists(), reason="run scripts/graph_inject/build_graphqa_v2.py")
+def test_incident_keeps_capacities():
+    """text-incident on v2: every MaximumFlow edge appears from both ends with its printed capacity; prompts without
+    capacities get the plain Talk-like-a-Graph text."""
+    import re
+    from graph_inject.data import load_samples
+    from graph_inject.methods.text import TextMethod, incident_encoder
+    method = TextMethod(OmegaConf.create({"encoding": "incident"}), 1536, 1.0)
+    for s in load_samples(str(V2 / "test.jsonl"), "graphqa_v2"):
+        text = method.rewrite_prompt(s)
+        caps = re.findall(r"\((\d+), (\d+), (\d+)\)", s.instruction)
+        if s.task != "MaximumFlow":
+            assert not caps and "capacity" not in text
+            assert incident_encoder(s.graph) in text
+            continue
+        lines = {int(m[1]): m[2] for m in re.finditer(r"Node (\d+) is connected to nodes? (.*)\.", text)}
+        for u, v, c in caps:
+            if u != v:
+                assert f"{v} ({c})" in lines[int(u)].split(", ")
+                assert f"{u} ({c})" in lines[int(v)].split(", ")
+
+
 def test_unsaturated_task_diagnostics():
     """edge_index / tri_hint / tri_cot touch only their task; the edge numbering ends at the gold edge count, the
     per-node triangle counts sum to 3x the gold, and the prompts still parse to the same graph."""
@@ -292,6 +314,38 @@ def test_unsaturated_task_diagnostics():
                 assert response.endswith(f"Answer: {gold}.")
                 assert final_answer(response, response).strip() == f"{gold}."
     assert final_answer("node 0: 1. Answer: 7.", "x Answer: 7.") == " 7." and final_answer(" 7.", " 7.") == " 7."
+
+
+COT = GRAPHQA / "hrm-text-grl-v2-cot/standard"
+
+
+@pytest.mark.skipif(not V2.exists(), reason="graphqa_v2 not built")
+def test_graphqa_cot_traces():
+    """Every v2 row gets a trace whose answer is its gold (only the 3 rule-less ConnectedNodes orders are replaced),
+    every detail level of a task agrees, and the built graphqa_v2_cot files are these traces."""
+    from graph_inject.cot import DETAILS, cot_response
+    from graph_inject.generate import final_answer
+    replaced = []
+    for k in ("train", "val", "test"):
+        v2 = [json.loads(line) for line in open(V2 / f"{k}.jsonl")]
+        built = [json.loads(line) for line in open(COT / f"{k}.jsonl")] if COT.exists() else None
+        for i, r in enumerate(v2):
+            traces = {d: cot_response(r["instruction"], r["task"], r["response"], d)
+                      for d in DETAILS.get(r["task"], ("full",))}
+            answers = {final_answer(t, t).strip() for t, _ in traces.values()}
+            assert len(answers) == 1
+            response, gold_replaced = traces["full"]
+            if gold_replaced:
+                replaced.append((k, i))
+            else:
+                assert answers == {r["response"].strip()}
+            if built is not None:
+                b = built[i]
+                assert b["instruction"] == r["instruction"] and b["task"] == r["task"]
+                assert (b["response"], b["cot_gold_replaced"]) == traces[b["cot_detail"]]
+    assert replaced == [("train", 329), ("train", 637), ("test", 59)]
+    for t in ("Answer: No nodes.", "x\nAnswer: There is no path from node 3 to node 5.", "x\nAnswer: Yes, there is a cycle."):
+        assert final_answer(t, t) == t.rsplit("Answer:", 1)[1]
 
 
 def test_graphtoken_query_readout_empty_graph():
