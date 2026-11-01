@@ -4,7 +4,7 @@ title: Graph-Structure Injection on GraphQA, MetaQA and KQA Pro (graph_inject)
 description: Standalone package that fine-tunes HRM-Text-1B, DFM-Mimir v1 and v1.5 on GraphQA, MetaQA and KQA Pro with hard-prompt, soft-prompt, absolute-PE and relative-attention-bias graph injection under one LoRA trainer; design, verification, results and fixes.
 tags: [graphs, graphqa, metaqa, kqapro, lora, soft-prompts, positional-encoding, attention-bias, hrm-text-1b, mimir]
 status: stable
-last_updated: 2026-10-29
+last_updated: 2026-11-01
 confidence: high
 ---
 # Graph-Structure Injection on GraphQA, MetaQA and KQA Pro
@@ -261,3 +261,9 @@ points:
 - **The one consistent pattern is `text-incident` on the KGs.** It is above the 3-seed `text` mean in all 6 KG cells
   (+0.1 to +0.9; a sign test gives p = 0.03), but below it on GraphQA. It is the only candidate a seeds-1–2 check
   could confirm. That check is 12 runs, about 10 h (estimated from the seed-0 run times). Not run.
+
+## Follow-up: structure on chain-of-thought GraphQA (2026-11-01)
+
+With a copy/lookup CoT target (`graphqa_v2_cot`), `abs-pe`, `node-tokens`, `text-incident` and `rel-bias-hilr` all
+tie or trail `text` (mean Δ −0.3 to −2.2 pt on 3 models, seed 0). See
+[GraphQA Chain of Thought](/pages/hrm-graph/graphqa-cot.md#structural-methods-on-cot-data-2026-11-01).

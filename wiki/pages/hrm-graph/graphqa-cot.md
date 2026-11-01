@@ -4,7 +4,7 @@ title: GraphQA Chain of Thought
 description: "graphqa_v2_cot, a GraphQA version whose every target is a decomposed trace (copies, lookups, single additions) ending in 'Answer: <gold>'; trace design, budget fallbacks, eval changes, and the 3-model text + LoRA results against v2."
 tags: [graphs, graphqa, chain-of-thought, counting, max-flow, hrm-text-1b, mimir]
 status: stable
-last_updated: 2026-10-30
+last_updated: 2026-11-01
 confidence: high
 ---
 # GraphQA Chain of Thought
@@ -129,3 +129,77 @@ Compare models on greedy_acc.
 **Next:** write out the hidden steps where the budget allows: the intersection as a per-w check list, and the
 augmenting-path BFS over residuals > 0. Also replicate with seeds 1–2 (reseeded data), since one seed and a
 55-question val subset select the epoch.
+
+## Structural methods on CoT data (2026-11-01)
+
+Question: does a structural encoding add anything once the target is a CoT trace? Four methods were trained on
+`graphqa_v2_cot` (seed 0, same recipe, eval and epoch selection as CoT `text` above), one per technique family:
+- `abs-pe`: absolute PE;
+- `node-tokens`: soft prompt;
+- `text-incident`: hard prompt;
+- `rel-bias-hilr`: relative attention bias.
+
+Runs are in `graph_inject_graphqa_v2_cot/<model>/<method>_s0`, queue log
+`graph_inject/queue_v2_cot_struct.log`. Each run took ~2.4–2.7 h (`rel-bias-hilr` 3.5–3.9 h, 2.66 s/step against
+0.8).
+
+**Prep fixes** (both in this queue):
+- `incident_encoder` dropped the MaximumFlow capacities, so `text-incident` could not solve that task. It now writes
+  `Node 0 is connected to nodes 1 (10), 2 (1).` (test `test_incident_keeps_capacities`). The longer form
+  `(capacity c)` pushed 16–21 train rows past 4,096 tokens.
+- The incident prompt is longer than the adjacency text that the dataset builder budgeted. New `fit_cot_window` in
+  `graph_inject/data.py`, called by `train.py` whenever `eval.max_seq_len` is set: a row that no longer fits gets the
+  next coarser CoT tier.
+  - `text-incident`: train 4 MaximumFlow and 3 TriangleCounting rows, val 1, test 1.
+  - `node-tokens`: 1 train TriangleCounting row.
+  - `train.py` refuses any train row that still does not fit.
+
+**Test greedy_acc** (324 questions). Δ is against CoT `text`; +w/−l counts the questions the method gets right and
+`text` wrong, and the reverse.
+
+| Method | HRM-1B | Mimir v1 | Mimir v1.5 | Mean Δ | +w/−l (HRM-1B, v1, v1.5) | Runaways |
+|---|---:|---:|---:|---:|---|---|
+| `text` | 0.910 | 0.944 | 0.966 | | | 4 / 1 / 1 |
+| `rel-bias-hilr` | **0.920** | 0.926 | 0.966 | −0.3 | +9/−6, +1/−7, +4/−4 | 1 / 8 / 3 |
+| `abs-pe` | 0.910 | 0.935 | 0.951 | −0.8 | +5/−5, +6/−9, +3/−8 | 2 / 4 / 3 |
+| `node-tokens` | 0.877 | **0.954** | 0.938 | −1.7 | +3/−14, +6/−3, +2/−11 | 9 / 7 / 3 |
+| `text-incident` | 0.867 | 0.929 | 0.957 | −2.2 | +4/−18, +1/−6, +2/−5 | 12 / 11 / 2 |
+
+| Method | MaximumFlow (HRM-1B / v1 / v1.5) | TriangleCounting | EdgeCount |
+|---|---|---|---|
+| `text` | 0.56 / 0.71 / 0.85 | 0.56 / 0.70 / 0.78 | 1.00 / 1.00 / 1.00 |
+| `rel-bias-hilr` | 0.59 / 0.68 / 0.79 | 0.67 / 0.67 / **0.89** | 1.00 / 1.00 / 1.00 |
+| `abs-pe` | 0.59 / 0.68 / 0.79 | 0.48 / 0.67 / 0.67 | 1.00 / 1.00 / 1.00 |
+| `node-tokens` | 0.44 / 0.74 / 0.74 | 0.30 / 0.81 / 0.63 | 1.00 / 1.00 / 1.00 |
+| `text-incident` | 0.50 / 0.68 / 0.85 | 0.30 / 0.59 / 0.70 | 0.78 / 0.94 / 0.94 |
+
+Runaway = a trace that reaches the 4,096-token cap without writing `Answer:`, scored wrong.
+
+- **No structural method beats CoT `text`.**
+  - Each of the 3 cells above `text` (`rel-bias-hilr` HRM-1B +1.0, `node-tokens` Mimir v1 +1.0, `rel-bias-hilr`
+    Mimir v1.5 TriangleCounting +0.11 on 27 questions) is within one seed: `text` seed sd ~1.1 pt is 3–4 questions.
+  - Every mean Δ is ≤ 0.
+  - With direct answers (v2) structure also gave ≤ ~1 pt; the CoT does not open room for it.
+- **Remaining errors are the same kind as with `text`:** the first MaximumFlow error is mostly the choice of augmenting
+  path (2–14 per run), then the update arithmetic. No method fixes the hidden steps.
+- **`text-incident` breaks EdgeCount** (0.78 / 0.94 / 0.94, 6 questions):
+  - The CoT trace enumerates edge tuples in the adjacency prompt's order, which the incident prompt does not contain.
+  - The model rebuilds the list from the per-node lines and repeats or skips an edge, e.g. `(10, 11)` again instead of
+    `(11, 12)`, ending 1–14 off.
+  - A trace must only copy what the prompt actually shows. A CoT for another prompt format needs its own trace (for
+    incident: count each node's list from the smaller endpoint).
+- **Soft and hard prompts loop more** on HRM-1B and Mimir v1: 7–12 runaways against 1–4 for `text`, mostly
+  MaximumFlow paths with bottleneck 0.
+  - `rel-bias-hilr` adds new degenerate loops:
+    - Mimir v1: 2 DisconnectedNodes traces list invented nodes `15, 20, 21, …, 650` in the "alphabetical order"
+      line;
+    - HRM-1B: 1 ShortestPath trace repeats `8` until the cap.
+- **Epoch selection is noise on the larger models:**
+  - The 55-question val subset is at 0.95–1.00 for most Mimir epochs (1 question = 1.8 pt). Ties go to the earliest
+    epoch.
+  - So 7 of 15 runs picked epoch 3–5, e.g. Mimir v1 `rel-bias-hilr` epoch 3 out of a 0.98 plateau over epochs 3–8.
+  - Arm differences of 1–2 pt on Mimir are not resolved by this protocol. Next time select on full val or the last
+    epoch.
+
+**Conclusion:** on GraphQA with a copy/lookup CoT, plain `text` is the method to use. The ceiling is set by the
+steps the trace leaves hidden (augmenting-path search, set intersection), not by how the structure is encoded.
