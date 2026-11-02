@@ -1,0 +1,14 @@
+# GraphQA v3 (scripts/graph_inject/build_graphqa_v3.py, wiki pages/hrm-graph/graphqa-v3.md): graphqa_v2_cot's train
+# without exact duplicates, plus 1,000 generated large TriangleCounting / MaximumFlow rows (full-detail CoT,
+# isomorphism-deduplicated against val/test); val/test are graphqa_v2_cot's files. Recipe and epoch selection as
+# graphqa_v2_cot (comparable scores); test is also run at the last epoch, and every epoch's LoRA is kept.
+dataset: graphqa_v3_cot
+epochs: 10
+eval: {batch_size: 8, max_generation: 3000, max_seq_len: 4096, select_metric: greedy_acc, val_subset: 55,
+       save_every_epoch: true, test_last_epoch: true}
+data:
+  train: data/graphs/graphqa/hrm-text-grl-v3-cot/standard/train.jsonl
+  val: data/graphs/graphqa/hrm-text-grl-v3-cot/standard/val.jsonl
+  test: data/graphs/graphqa/hrm-text-grl-v3-cot/standard/test.jsonl
+out_root: /work/dfm/marius-ortega/dfm-hrm-graphs/graph_inject_graphqa_v3_cot
+wandb: {group: graphqa-v3-cot-inject}

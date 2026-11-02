@@ -15,6 +15,8 @@ Every epoch: greedy generation on val (eval_graphqa metrics). The best epoch by 
 earliest, as scripts/graphs/run_graphqa_hrm1b.sh) is evaluated on test. Outputs in <out_root>/<model>/<method>_s<seed>/
 (one out_root per dataset):
 config.yaml, eval_val_ep<N>.json, eval_test.json, best_trainable.pt (trainable params only).
+eval.test_last_epoch also evaluates the final epoch's weights on test (eval_test_last.json, selection-free);
+eval.save_every_epoch keeps every epoch's trainable params (trainable_ep<N>.pt).
 """
 import json
 import math
@@ -191,9 +193,12 @@ def main(argv: list[str]):
         if best is None or report[select] > best[select]:
             best = {"epoch": epoch, select: report[select], "state": trainable_state(model)}
             torch.save(best["state"], os.path.join(out_dir, "best_trainable.pt"))
+        if cfg.eval.save_every_epoch:
+            torch.save(trainable_state(model), os.path.join(out_dir, f"trainable_ep{epoch}.pt"))
         if cfg.max_steps and step >= cfg.max_steps:
             break
 
+    last = {"epoch": epoch, "state": trainable_state(model)} if cfg.eval.test_last_epoch else None
     model.load_state_dict(best["state"], strict=False)
     report = evaluate(cfg, ckpt, model, splits["test"], autocast) | {"best_epoch": best["epoch"], "step": step}
     with open(os.path.join(out_dir, "eval_test.json"), "w") as f:
@@ -201,6 +206,14 @@ def main(argv: list[str]):
     log_eval("test", report, step)
     wandb.summary.update({"best_epoch": best["epoch"], "test_greedy_acc": report["greedy_acc"],
                           "test_greedy_acc_answerable": report["greedy_acc_answerable"]})
+    if last is not None:  # selection-free test number: the final epoch's weights
+        if last["epoch"] != best["epoch"]:
+            model.load_state_dict(last["state"], strict=False)
+            report = evaluate(cfg, ckpt, model, splits["test"], autocast)
+        report = report | {"epoch": last["epoch"], "best_epoch": best["epoch"], "step": step}
+        with open(os.path.join(out_dir, "eval_test_last.json"), "w") as f:
+            json.dump(report, f, indent=1)
+        wandb.summary.update({"test_last_greedy_acc": report["greedy_acc"]})
     wandb.finish()
 
 

@@ -18,6 +18,7 @@ max_steps: null           # stop early (benchmarks / smoke tests)
 log_every: 10
 # val_subset: N val samples per epoch; select_metric: the val metric that picks the best epoch (greedy_acc for chains of
 # thought, where tf_em needs the whole trace verbatim); max_seq_len: stop generating at prompt + generated tokens.
-eval: {max_generation: 96, batch_size: 16, val_subset: null, limit: null, select_metric: tf_em, max_seq_len: null}
+eval: {max_generation: 96, batch_size: 16, val_subset: null, limit: null, select_metric: tf_em, max_seq_len: null,
+       save_every_epoch: false, test_last_epoch: false}
 data: {limit: null}       # first N rows of every split (smoke runs)
 wandb: {project: Graph-Positional-Encoding-Exploration, mode: online}

@@ -4,7 +4,7 @@ title: GraphQA Chain of Thought
 description: "graphqa_v2_cot, a GraphQA version whose every target is a decomposed trace (copies, lookups, single additions) ending in 'Answer: <gold>'; trace design, budget fallbacks, eval changes, and the 3-model text + LoRA results against v2."
 tags: [graphs, graphqa, chain-of-thought, counting, max-flow, hrm-text-1b, mimir]
 status: stable
-last_updated: 2026-11-01
+last_updated: 2026-11-02
 confidence: high
 ---
 # GraphQA Chain of Thought
@@ -175,7 +175,7 @@ Runs are in `graph_inject_graphqa_v2_cot/<model>/<method>_s0`, queue log
 
 Runaway = a trace that reaches the 4,096-token cap without writing `Answer:`, scored wrong.
 
-- **No structural method beats CoT `text`.**
+- **No structural method beats CoT `text`.** (Mean Δ above is against seed-0 `text` only; re-scored against the 3-seed mean in [Seed variance of CoT text](#seed-variance-of-cot-text-2026-11-02).)
   - Each of the 3 cells above `text` (`rel-bias-hilr` HRM-1B +1.0, `node-tokens` Mimir v1 +1.0, `rel-bias-hilr`
     Mimir v1.5 TriangleCounting +0.11 on 27 questions) is within one seed: `text` seed sd ~1.1 pt is 3–4 questions.
   - Every mean Δ is ≤ 0.
@@ -203,3 +203,76 @@ Runaway = a trace that reaches the 4,096-token cap without writing `Answer:`, sc
 
 **Conclusion:** on GraphQA with a copy/lookup CoT, plain `text` is the method to use. The ceiling is set by the
 steps the trace leaves hidden (augmenting-path search, set intersection), not by how the structure is encoded.
+
+## Follow-up: GraphQA v3 (2026-11-02)
+
+The remaining Mimir v1.5 errors are on large TriangleCounting / MaximumFlow instances, and 12% of v2 train rows are
+exact duplicates. The planned data fix is in [GraphQA v3](/pages/hrm-graph/graphqa-v3.md).
+
+## Seed variance of CoT text (2026-11-02)
+
+`text` on `graphqa_v2_cot` was rerun with seeds 1 and 2 (LoRA init and data order; same recipe and selection),
+2026-11-01 23:24 to 2026-11-02 14:17, with no failures. Test greedy_acc in points, best epoch in brackets:
+
+| Model | s0 | s1 | s2 | sd |
+|---|---|---|---|---:|
+| HRM-1B | 91.0 (7) | 85.8 (2) | 91.4 (8) | 3.1 |
+| Mimir v1 | 94.4 (6) | 92.9 (5) | 91.4 (2) | 1.5 |
+| Mimir v1.5 | 96.6 (7) | 96.0 (9) | 95.4 (5) | 0.6 |
+
+- **Pooled seed sd is 2.0 pt**, against 1.1 on direct-answer GraphQA. Without HRM-1B s1 it would be 0.97.
+- **Epoch selection drives most of it.** Two runs picked epoch 2:
+  - HRM-1B s1: a val spike of 0.95 at epoch 2 (0.87–0.93 after). Test TriangleCounting 0.22.
+  - Mimir v1 s2: val is 0.98 at every epoch from 2 to 10, and ties go to the earliest. Test TriangleCounting 0.52,
+    10 runaways.
+  - The 55-question subset (4 TriangleCounting, 6 MaximumFlow) cannot rank epochs once the model is near saturation.
+- **Structural methods re-scored** against the 3-seed `text` mean, z = Δ̄ / (sd·√(4/3)/√3), SE 1.36 pt:
+
+  | Method | Δ HRM-1B / v1 / v1.5 | Mean Δ | z |
+  |---|---|---:|---:|
+  | `rel-bias-hilr` | +2.6 / −0.3 / +0.6 | +1.0 | +0.71 |
+  | `abs-pe` | +1.6 / +0.6 / −0.9 | +0.4 | +0.33 |
+  | `node-tokens` | −1.7 / +2.5 / −2.2 | −0.5 | −0.35 |
+  | `text-incident` | −2.7 / 0.0 / −0.3 | −1.0 | −0.73 |
+
+  All are within |z| < 1, so none differs from `text`. The conclusion of the structural section stands.
+- **Consequence:** CoT runs from v3 on also report test at the last epoch (`eval.test_last_epoch`), which needs no
+  selection. Selecting on a saturated subset with ties to the earliest epoch should not be reused as the only number.
+
+## Interpretation: what limits the unsaturated GraphQA tasks (2026-11-02)
+
+The study ran in three steps, all with text + LoRA on the 3 pretrained models. What each step showed:
+
+1. **Is the graph structure in the prompt the limit? No.**
+   - Structural injection on direct-answer GraphQA (hard and soft prompts, absolute PE, relative attention bias) moves
+     no method more than ±1.2 pt from the 3-seed `text` mean: |z| < 1, seed sd 1.1 pt
+     ([Graph Structure Injection](/pages/hrm-graph/graph-structure-injection.md#seed-variance-of-text-2026-10-29)).
+   - The one prompt change that helped added missing *information*, not a better encoding of what was there:
+     MaximumFlow prompts lacked their capacities. Printing them (v2) took MaximumFlow from ~0.17 to 0.59–0.68.
+   - Numbering the edges saturated EdgeCount. It is a counting aid, not structure
+     ([Unsaturated GraphQA Tasks](/pages/hrm-graph/graphqa-unsaturated-tasks.md)).
+2. **Is it the model's reasoning? Yes: the serial computation a direct answer has to do inside one forward pass.**
+   - The copy/lookup CoT lifts the 3-seed means to 89.4 / 92.9 / 96.0, against 82.4 / 85.8 / 86.7 for v2 `text`
+     (seed 0). That is +7.0 / +7.1 / +9.3 pt, about 3–5 CoT seed sds. 6, 7 and 9 of the 11 tasks are at 1.00 on all
+     3 seeds.
+   - The evidence points to computation per answer token, not to missing knowledge or parameter count:
+     - the same weights solve the tasks once the steps are written out;
+     - the remaining errors are in the steps the trace still hides (set intersection, augmenting-path search), and
+       accuracy falls as the number of steps grows;
+     - the largest model (Mimir v1.5) holds up longest on the longest traces.
+   - Caveats: the CoT also supervises 38× more target tokens, and epoch selection on the 55-question subset adds noise
+     (seed sd 2.0 pt).
+3. **Once CoT carries the computation, does structure help? No.**
+   - `abs-pe`, `node-tokens`, `text-incident` and `rel-bias-hilr` on the CoT data land between −1.0 and +1.0 pt of
+     the 3-seed `text` mean, all |z| < 1.
+   - 8 of 12 cells fall inside the `text` min–max; noise alone predicts ~6.
+   - The only per-task effect is `text-incident` breaking EdgeCount, from a mismatch between the trace and the
+     prompt.
+   - Structure does not address the hidden steps that remain.
+
+**Conclusion.** The unsaturated GraphQA tasks are limited by serial computation that has to happen inside a forward
+pass, not by access to the graph structure. Structural encodings, with or without CoT, do not change that. Writing
+the computation out does, except for the steps the trace still hides.
+
+**Open question:** do those hidden steps become reliable with more training data on large instances
+([GraphQA v3](/pages/hrm-graph/graphqa-v3.md)), or do they also have to be written out?

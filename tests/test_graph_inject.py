@@ -348,6 +348,45 @@ def test_graphqa_cot_traces():
         assert final_answer(t, t) == t.rsplit("Answer:", 1)[1]
 
 
+V3 = GRAPHQA / "hrm-text-grl-v3-cot/standard"
+
+
+@pytest.mark.skipif(not V3.exists(), reason="graphqa_v3_cot not built")
+def test_graphqa_v3_data():
+    """v3: val/test are v2-CoT's files; train is v2-CoT train minus duplicates, plus new full-detail rows whose trace
+    is cot_response's, inside their size bins, and whose graphs are new up to isomorphism (wiki graphqa-v3)."""
+    import sys
+    sys.path.insert(0, str(REPO / "scripts/graph_inject"))
+    from build_graphqa_v3 import QUOTAS, IsoIndex, size_bin, structure
+    from graph_inject.cot import cot_response
+    from graph_inject.generate import final_answer
+    for k in ("val", "test"):
+        assert (V3 / f"{k}.jsonl").read_bytes() == (COT / f"{k}.jsonl").read_bytes()
+    train = [json.loads(line) for line in open(V3 / "train.jsonl")]
+    v2 = [json.loads(line) for line in open(COT / "train.jsonl")]
+    assert len({r["instruction"] for r in train}) == len(train)
+    old, new = [r for r in train if "gen_algorithm" not in r], [r for r in train if "gen_algorithm" in r]
+    assert train[:len(old)] == old and all(r in v2 for r in old)
+    graph = lambda r: structure(parse_graphqa(r["instruction"]).to_networkx())
+    heldout, heldout_task = IsoIndex(), {t: IsoIndex() for t in QUOTAS}
+    for k in ("val", "test"):
+        for r in map(json.loads, open(V3 / f"{k}.jsonl")):
+            heldout.add(graph(r))
+            if r["task"] in QUOTAS:
+                heldout_task[r["task"]].add(graph(r))
+    bins = {}
+    for r in train:
+        if r["task"] in QUOTAS:
+            assert graph(r) not in heldout_task[r["task"]]
+    for r in new:
+        gold = final_answer(r["response"], r["response"]).strip()
+        assert (r["cot_detail"], r["response"]) == ("full", cot_response(r["instruction"], r["task"], gold, "full")[0])
+        assert graph(r) not in heldout
+        n = int(gold.rstrip(".")) if r["task"] == "TriangleCounting" else r["response"].count("Path ")
+        bins[(r["task"], size_bin(r["task"], n))] = bins.get((r["task"], size_bin(r["task"], n)), 0) + 1
+    assert bins == {(t, b): q for t, quota in QUOTAS.items() for b, q in quota.items()}
+
+
 def test_graphtoken_query_readout_empty_graph():
     """graphtoken-faithful at a single-prompt prefill of a KQA Pro prompt without facts (0 nodes)."""
     from graph_inject.data import encode_samples, load_samples
