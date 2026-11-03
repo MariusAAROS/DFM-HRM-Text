@@ -1,4 +1,4 @@
-"""vLLM-vs-native parity for the §7a gate (wiki: mimir-graph-benchmark-plan, RL stack).
+"""vLLM-vs-native parity for the §7a gate (wiki: mimir-graph-benchmark, RL stack).
 
 Two checks, both CPU-only once their inputs exist:
 
@@ -11,8 +11,8 @@ Two checks, both CPU-only once their inputs exist:
   outputs  Per-sample agreement of two greedy runs on the same rows: a native report (scripts/graphs/eval_graphqa.py
            --out, "samples" with pred / greedy_acc) and a vLLM report (eval_vllm.py .samples.jsonl). Rows are
            matched by order (eval_graphqa's ids are row indices) and must share the gold answer.
-               .venv/bin/python -m graph_bench.eval.parity_check outputs native.json vllm.samples.jsonl
-Gate: identical prompt ids on every row; greedy_acc within 1 pt and >= 95% identical predictions (bf16 noise flips a
+               .venv/bin/python -m graph_bench.eval.parity_check outputs native.json vllm.samples.jsonl records.jsonl
+Gate: identical prompt ids on every row; acc within 1 pt and >= 95% identical generations (bf16 noise flips a
 few argmaxes, as in the HF-import parity: 202/203).
 """
 import argparse
@@ -22,8 +22,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from graph_bench.schema import GRL_PREFIX, prompt_text, read_records  # noqa: E402
-from graph_bench.scoring import normalize  # noqa: E402
+from graph_bench.schema import GRL_PREFIX, ORDERED_SEP, SET_SEP, prompt_text, read_records  # noqa: E402
+from graph_bench.scoring import normalize, score_record  # noqa: E402
 
 
 def check_tokens(args) -> int:
@@ -54,23 +54,27 @@ def check_tokens(args) -> int:
 
 
 def check_outputs(args) -> int:
+    """Raw generations compared (native "pred" is the whole generation; vLLM's "preds" is the extracted answer), and
+    both sides scored by graph_bench.scoring against the bench records, so the acc delta is one metric."""
     native = json.loads(Path(args.native).read_text())["samples"]
     with open(args.vllm) as f:
         vllm = [json.loads(line) for line in f if line.strip()]
-    if len(native) != len(vllm):
-        raise SystemExit(f"row counts differ: native {len(native)} vs vllm {len(vllm)}")
-    same_pred = acc_native = acc_vllm = 0
-    for nat, vl in zip(native, vllm):
-        gold = vl["gold"][0]
-        if normalize(nat["gold"]) != normalize(gold):
-            raise SystemExit(f"row {nat['id']}: gold differs ({nat['gold']!r} vs {gold!r}); not the same rows")
-        same_pred += normalize(nat["pred"]) == normalize(vl["preds"][0])
-        acc_native += nat["greedy_acc"]
+    recs = [r for path in args.records for r in read_records(path)]
+    if not len(native) == len(vllm) == len(recs):
+        raise SystemExit(f"row counts differ: native {len(native)}, vllm {len(vllm)}, records {len(recs)}")
+    same = acc_native = acc_vllm = 0
+    for nat, vl, rec in zip(native, vllm, recs):
+        golds = {normalize(rec.answers[0]), normalize(SET_SEP.join(rec.answers)), normalize(ORDERED_SEP.join(rec.answers))}
+        if vl["id"] != rec.id or normalize(nat["gold"]) not in golds:
+            raise SystemExit(f"row {nat['id']} / {rec.id}: gold differs ({nat['gold']!r} vs {rec.answers!r}); "
+                             "not the same rows")
+        same += normalize(nat["pred"]) == normalize(vl["generations"][0])
+        acc_native += score_record(nat["pred"], rec)["acc"]
         acc_vllm += vl["acc"][0]
     n = len(native)
-    print(f"outputs: n={n} identical predictions {same_pred / n:.3f}; greedy_acc native {acc_native / n:.4f} "
+    print(f"outputs: n={n} identical generations {same / n:.3f}; acc native {acc_native / n:.4f} "
           f"vs vLLM {acc_vllm / n:.4f}")
-    ok = same_pred / n >= 0.95 and abs(acc_native - acc_vllm) / n <= 0.01
+    ok = same / n >= 0.95 and abs(acc_native - acc_vllm) / n <= 0.01
     print("PASS" if ok else "FAIL")
     return int(not ok)
 
@@ -86,6 +90,7 @@ def main():
     o = sub.add_parser("outputs")
     o.add_argument("native")
     o.add_argument("vllm")
+    o.add_argument("records", nargs="+", help="The bench JSONL both runs were made on, in the same order.")
     args = ap.parse_args()
     sys.exit(check_tokens(args) if args.cmd == "tokens" else check_outputs(args))
 

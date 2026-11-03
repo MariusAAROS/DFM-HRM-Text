@@ -1,6 +1,6 @@
 """GraphQA -> bench records: the v3-CoT splits, a fresh-seed probe and a larger-graph OOD split.
 
-Tier 1 (wiki: mimir-graph-benchmark-plan):
+Tier 1 (wiki: mimir-graph-benchmark):
   train / val / test   data/graphs/graphqa/hrm-text-grl-v3-cot (graphqa-v3.md), so test is the same 324 questions as
                        every GraphQA CoT run. The rendered prompt is checked byte-identical to the row's instruction
                        (minus GRL's "#### Question\\n", which export_hrm.py adds back); the trace is the row's CoT.
@@ -34,7 +34,7 @@ from build_graphqa_v2 import with_capacities  # noqa: E402
 from build_graphqa_v3 import IsoIndex, structure  # noqa: E402
 from graph_inject.cot import cot_response  # noqa: E402
 from graph_inject.structure import parse_graphqa  # noqa: E402
-from graphqa import graph_generator_utils, graph_task  # noqa: E402
+from graphqa import graph_generator_utils, graph_task, graph_text_encoder  # noqa: E402
 
 TASKS = ("EdgeExistence", "NodeDegree", "NodeCount", "EdgeCount", "ConnectedNodes", "DisconnectedNodes", "CycleCheck",
          "Reachability", "ShortestPath", "MaximumFlow", "TriangleCounting")
@@ -64,6 +64,12 @@ def generate(split: str, seen: dict, stats: Counter) -> list[Record]:
     seed = SEEDS[split]
     if SIZES[split] is not None:
         graph_generator_utils._NUMBER_OF_NODES_RANGE = SIZES[split]
+        # SBM needs a community range per size class; the generator has none for "xl" (2-9 for "large", so 2-11)
+        graph_generator_utils._NUMBER_OF_COMMUNITIES_RANGE.setdefault("xl", np.arange(2, 12))
+        # the "integer" node names stop at 19; extend them (in place: graph_task reads the same dict)
+        names = graph_text_encoder.TEXT_ENCODER_DICT["adjacency"]
+        assert all(names[i] == str(i) for i in range(len(names))), "integer names are not str(i)"
+        names.update({i: str(i) for i in range(len(names), 64)})
     pool = []
     for ai, alg in enumerate(ALGORITHMS):
         kw = {"er_max_sparsity": 0.3} if split == "test_large" else {}
@@ -78,6 +84,9 @@ def generate(split: str, seen: dict, stats: Counter) -> list[Record]:
             if n >= PER_TASK:
                 break
             alg, graph = pool[j]
+            if graph.number_of_edges() == 0:  # no "The edges in G are:" line to parse
+                stats[f"{split}_no_edges"] += 1
+                continue
             random.seed(seed * 100 + ti * 10_000 + int(j))  # graph_task samples question nodes with `random`
             ex = getattr(graph_task, task)().prepare_examples_dict([graph.copy()], [alg], "adjacency")[0]
             row = {"instruction": GRL_PREFIX + ex["question"], "response": ex["answer"], "task": task}

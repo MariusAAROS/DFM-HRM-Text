@@ -1,0 +1,12 @@
+# graph_bench E4 control (wiki: mimir-graph-benchmark): LoRA SFT on CLUTRR answers (instruct prompt, "Answer:" line),
+# from the merged E2 model (model.hf_dir=<native import of it>), against E4's answer-only GRPO from the same start.
+# Built by graph_bench.export_hrm --target answer --prompt instruct. Train only; evaluated with vLLM.
+dataset: bench_clutrr_answer
+epochs: 1
+eval: {native: false, max_seq_len: 4096}
+data:
+  train: data/graphs/bench/sft/clutrr_answer.jsonl
+  val: null
+  test: null
+out_root: /work/dfm/marius-ortega/dfm-hrm-graphs/mimir_bench/sft_clutrr
+wandb: {project: Mimir-Graph-RLVR, group: mimir-bench-e4}

@@ -1,0 +1,12 @@
+# graph_bench E1 (wiki: mimir-graph-benchmark): LoRA SFT on the train mixture, answer line only. Same questions,
+# prompt (instruct) and replay rows as E2; built by graph_bench.export_hrm --target answer --prompt instruct
+# --traced-only --extra replay.jsonl. Train only (eval.native=false); epoch = last, evaluated with vLLM.
+dataset: bench_sft_answer
+epochs: 3
+eval: {native: false, max_seq_len: 4096}
+data:
+  train: data/graphs/bench/sft/train_answer.jsonl
+  val: null
+  test: null
+out_root: /work/dfm/marius-ortega/dfm-hrm-graphs/mimir_bench/sft_answer
+wandb: {project: Mimir-Graph-RLVR, group: mimir-bench-sft}

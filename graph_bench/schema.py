@@ -1,4 +1,4 @@
-"""One record format for every graph / KG reasoning set of the Mimir benchmark (wiki: mimir-graph-benchmark-plan).
+"""One record format for every graph / KG reasoning set of the Mimir benchmark (wiki: mimir-graph-benchmark).
 
 Converters in graph_bench/sources/ write `Record`s to data/graphs/bench/<dataset>/<split>.jsonl. Exporters render them:
 export_hrm.py -> data_io JSONL (instruction / response / condition / task), export_verl.py -> VeRL parquet.

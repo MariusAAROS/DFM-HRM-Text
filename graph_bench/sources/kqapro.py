@@ -1,4 +1,4 @@
-"""KQA Pro -> bench records with KoPL execution traces (Tier 1, train; wiki: mimir-graph-benchmark-plan).
+"""KQA Pro -> bench records with KoPL execution traces (Tier 1, train; wiki: mimir-graph-benchmark).
 
 Rows are GRL's (data/graphs/kqapro/baseline): Graph-Representation-Learning-for-LLM's generator is re-run with its seed
 (42) and a KBIndex subclass that also keeps the structured facts, and every row is checked to be byte-identical to

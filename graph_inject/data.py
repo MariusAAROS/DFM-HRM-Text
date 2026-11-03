@@ -33,6 +33,8 @@ class EncodedSample:
 
 
 def parse_graph(text: str, dataset: str) -> PromptGraph:
+    if dataset.startswith("bench"):  # graph_bench SFT mixtures (many sources + replay): text method only, no structure
+        return PromptGraph(0, [], [], [], (0, 0), 0)
     return parse_graphqa(text) if dataset.startswith("graphqa") else parse_kg_facts(text, dataset)
 
 

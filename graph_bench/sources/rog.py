@@ -1,6 +1,6 @@
 """WebQSP and CWQ (Freebase) -> bench records, from RoG's per-question subgraphs (rmanluo/RoG-webqsp, RoG-cwq).
 
-Tier 1 (wiki: mimir-graph-benchmark-plan): WebQSP trains, CWQ (compositions of WebQSP patterns) is a near-OOD held-out
+Tier 1 (wiki: mimir-graph-benchmark): WebQSP trains, CWQ (compositions of WebQSP patterns) is a near-OOD held-out
 task. RoG's subgraphs hold ~3-5k triples, so each prompt is cut down to MAX_FACTS:
 
 1. Relation paths: the (relation, direction) sequences of the shortest paths (<= MAX_HOPS) from a question entity to
@@ -84,7 +84,7 @@ def _shortest_relation_paths(q, targets, out, inn):
         return res
 
     found = {}
-    for t in targets:
+    for t in sorted(targets):  # sorted: set order varies with the per-process string hash seed
         if t in depth and t != q:
             found[t] = rel_paths(t)
     return found
@@ -95,7 +95,7 @@ def _walk(q, path, out, inn):
     frontier, used = {q}, []
     for r, d in path:
         nxt, hop = set(), []
-        for u in frontier:
+        for u in sorted(frontier):
             for rr, v, i in (out[u] if d == 1 else inn[u]):
                 if rr == r:
                     nxt.add(v)
@@ -223,23 +223,41 @@ def _job(args):
         return None, "recursion"
 
 
+def _rows(files: list[str], limit: int | None, batch_size: int = 64):
+    """Stream the parquet rows: CWQ train is 8.1 GB of Arrow (~30 GB as Python objects), so the table is never
+    materialised (reading it whole and forking 32 workers off that heap ran the container out of memory, 2026-11-02)."""
+    n = 0
+    for f in files:
+        for batch in pq.ParquetFile(f).iter_batches(batch_size=batch_size):
+            for row in batch.to_pylist():
+                if limit is not None and n >= limit:
+                    return
+                n += 1
+                yield row
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dataset", choices=["webqsp", "cwq"], required=True)
-    ap.add_argument("--workers", type=int, default=32)
+    ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--out", type=Path, default=OUT, help="Output root (<out>/<dataset>/<split>.jsonl).")
     args = ap.parse_args()
-    for src_split, split in SPLITS.items():
-        files = sorted(glob.glob(str(RAW / args.dataset / "data" / f"{src_split}-*.parquet")))
-        rows = pq.read_table(files).to_pylist()
-        if args.limit:
-            rows = rows[: args.limit]
-        with Pool(args.workers) as pool:
-            results = pool.map(_job, [(r, args.dataset, split) for r in rows], chunksize=16)
-        stats = Counter(reason for _, reason in results)
-        recs = [r for r, _ in results if r is not None]
-        write_records(recs, OUT / args.dataset / f"{split}.jsonl")
-        print(f"{args.dataset} {split}: {len(recs)} records {dict(stats)}")
+    # Fork the workers before reading any data, so they do not inherit (and copy-on-write) a large parent heap.
+    with Pool(args.workers, maxtasksperchild=200) as pool:
+        for src_split, split in SPLITS.items():
+            files = sorted(glob.glob(str(RAW / args.dataset / "data" / f"{src_split}-*.parquet")))
+            stats = Counter()
+
+            def records():
+                jobs = ((r, args.dataset, split) for r in _rows(files, args.limit))
+                for rec, reason in pool.imap(_job, jobs, chunksize=4):  # ordered: same output as before
+                    stats[reason] += 1
+                    if rec is not None:
+                        yield rec
+
+            n = write_records(records(), args.out / args.dataset / f"{split}.jsonl")
+            print(f"{args.dataset} {split}: {n} records {dict(stats)}", flush=True)
 
 
 if __name__ == "__main__":

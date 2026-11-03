@@ -1,7 +1,7 @@
 """Entity-anonymised variant of a record: every label in `entities` becomes an opaque id ("E17") everywhere.
 
 The gap between a model's score on the named and the anonymised version of a set measures how much it answers from
-parametric knowledge rather than from the graph in the prompt (wiki: mimir-graph-benchmark-plan, challenge 4).
+parametric knowledge rather than from the graph in the prompt (wiki: mimir-graph-benchmark, challenge 4).
 Relations and literals keep their text, so the reasoning the question asks for is unchanged.
 
 Labels are replaced longest first on word boundaries, in facts (subject and entity objects only), question, answers

@@ -52,6 +52,17 @@ def test_extract_answer():
     assert scoring.score(cot, ["Bob"])["acc"]
 
 
+def test_special_tokens():
+    # VeRL's reward manager keeps special tokens (hrm_verl_ext); vLLM eval drops them. Both must score the same.
+    assert scoring.extract_answer("x\nAnswer: Paris<turn|>") == "Paris"
+    assert scoring.extract_answer("x\nAnswer: Paris<turn|><eos>") == "Paris"
+    assert scoring.extract_answer("<|channel>thought\nx<channel|>Answer: Paris<turn|>") == "Paris"
+    assert scoring.extract_answer("thinking...<channel|>Bob.<turn|>") == "Bob."
+    assert scoring.extract_answer("Answer: Bob.<|box_end|>") == "Bob."
+    assert scoring.score("Answer: A | B<turn|>", ["a", "b"], "set")["acc"]
+    assert not scoring.has_answer_line("Paris<turn|>Answer: Lyon")  # text after the end of turn is ignored
+
+
 def test_set_and_ordered():
     m = scoring.score("Answer: b | A", ["a", "b"], "set")
     assert m["acc"] and m["f1"] == 1.0
@@ -123,3 +134,23 @@ def test_reward():
     assert compute_score("toy", "reasoning\nAnswer: a | b", gt)["score"] == 1.0
     assert compute_score("toy", "a | b", gt)["score"] == 0.0          # no Answer line
     assert compute_score("toy", "x\nAnswer: a", gt)["acc"] == 0.0
+    assert compute_score("toy", "x\nAnswer: a | b<turn|>", gt)["score"] == 1.0
+    assert compute_score("toy", "<|channel>thought\nx<channel|>Answer: a | b<turn|>", gt)["score"] == 1.0
+
+
+def test_kqapro_gold_validation_rules():
+    from graph_bench.sources.kqapro_gold import SpineBuilder
+    kb = {"entities": {"Q1": {"name": "Chicago", "instanceOf": ["C1"], "attributes": [], "relations": []},
+                       "Q2": {"name": "Chicago", "instanceOf": ["C2"], "attributes": [],
+                              "relations": [{"relation": "r", "direction": "forward", "object": "Q3", "qualifiers": {}}]},
+                       "Q3": {"name": "Fosse", "instanceOf": [], "attributes": [], "relations": []}},
+          "concepts": {}}
+    merged = SpineBuilder.merge_by_name(kb)["entities"]
+    assert set(merged) == {"N::Chicago", "N::Fosse"}            # homonyms are one prompt node
+    assert merged["N::Chicago"]["instanceOf"] == ["C1", "C2"]
+    assert merged["N::Chicago"]["relations"][0]["object"] == "N::Fosse"
+    prog = {"function": ["Find", "Relate", "Find", "Relate", "Or", "Count"], "inputs": [[]] * 6}
+    assert SpineBuilder.empty_allowed(prog, [0, 0, 1, 1, 1, None])  # empty branch of a non-empty Or
+    assert not SpineBuilder.empty_allowed(prog, [0, 0, 0, 0, 0, None])
+    prog = {"function": ["Find", "Relate", "Find", "Relate", "And", "Count"], "inputs": [[]] * 6}
+    assert not SpineBuilder.empty_allowed(prog, [1, 1, 1, 1, 0, None])  # Count 0 through an empty And

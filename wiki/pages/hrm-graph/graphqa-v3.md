@@ -143,6 +143,8 @@ W&B run `oh5c7d74` (project `Graph-Positional-Encoding-Exploration`, group `grap
   container restarted). Val JSONs and `trainable_ep<N>.pt` exist for epochs 1–7; epochs 8–10 are lost.
   - The trainer's own host RAM is small (2–4 GB RSS, container peak 18 GB during the test rerun, limit 128 GB), so the
     out-of-memory kill most likely came from another process. Not confirmed: the kernel counters were reset.
+    Superseded (2026-11-03): the likely culprit was the CWQ conversion of `graph_bench/sources/rog.py` running in
+    parallel ([plan page](/pages/hrm-graph/mimir-graph-benchmark.md#out-of-memory-crash-of-2026-11-02-1650)).
 - **Test without retraining:** `test_only=true wandb.id=<run id>` (new in `graph_inject/train.py`) picks the best epoch
   from the existing `eval_val_ep<N>.json` (same rule), tests it, and tests the highest `trainable_ep<N>.pt` as the
   "last" epoch. Results land on the original W&B run.

@@ -19,6 +19,9 @@ from graph_bench.checkers import CHECKERS
 ANSWER_MARKER = "Answer:"
 THINK_CLOSERS = ("</think>", "<channel|>")
 _ANSWER_LINE = re.compile(r"(?im)^[ \t]*answer[ \t]*:[ \t]*(.*)$")
+# Gemma / Mimir (<turn|>, <eos>, <end_of_turn>), HRM-Text (<|box_end|>), ChatML (<|im_end|>, <|endoftext|>)
+_END_OF_TURN = re.compile(r"<turn\|>|<eos>|<end_of_turn>|<\|box_end\|>|<\|im_end\|>|<\|endoftext\|>")
+_SPECIAL = re.compile(r"<\|[a-z_]+\|?>|<[a-z_]+\|>|</?think>")
 
 
 def normalize(text: str) -> str:
@@ -45,15 +48,32 @@ def set_scores(pred: str, label: str) -> tuple[float, float, float, float]:
     return precision, recall, f1, float(bool(got) and got[0] in gold)
 
 
+def cut_at_end_of_turn(text: str) -> str:
+    """Drop everything from the first end-of-turn / end-of-text token on. VeRL's reward manager (patched by
+    hrm_verl_ext to keep special tokens) passes "...Answer: Paris<turn|>", which would otherwise score as wrong."""
+    return _END_OF_TURN.split(text, 1)[0]
+
+
+def strip_special(text: str) -> str:
+    """cut_at_end_of_turn, then every other special token (thought-channel markers, ...) becomes a line break, so
+    "...<channel|>Answer: X" still has its answer at a line start."""
+    return _SPECIAL.sub("\n", cut_at_end_of_turn(text))
+
+
+def has_answer_line(text: str) -> bool:
+    return bool(_ANSWER_LINE.search(strip_special(text)))
+
+
 def extract_answer(text: str) -> str:
     """The answer part of a generation: after the last "Answer:" line, else after a think closer, else all."""
-    matches = list(_ANSWER_LINE.finditer(text))
+    text = cut_at_end_of_turn(text)
+    matches = list(_ANSWER_LINE.finditer(_SPECIAL.sub("\n", text)))
     if matches:
         return matches[-1].group(1).strip()
     for closer in THINK_CLOSERS:
         if closer in text:
             text = text.rsplit(closer, 1)[-1]
-    return text.strip()
+    return _SPECIAL.sub("\n", text).strip()
 
 
 def _ordered_list(text: str) -> list[str]:

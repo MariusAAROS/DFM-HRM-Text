@@ -17,6 +17,8 @@ earliest, as scripts/graphs/run_graphqa_hrm1b.sh) is evaluated on test. Outputs 
 config.yaml, eval_val_ep<N>.json, eval_test.json, best_trainable.pt (trainable params only).
 eval.test_last_epoch also evaluates the final epoch's weights on test (eval_test_last.json, selection-free);
 eval.save_every_epoch keeps every epoch's trainable params (trainable_ep<N>.pt).
+eval.native=false trains only (graph_bench SFT arms): trainable_ep<N>.pt every epoch, no generation; the merged model
+is evaluated with vLLM (graph_bench/merge_lora_hf.py, graph_bench/eval/eval_vllm.py).
 
 test_only=true skips training and runs the test stage of an interrupted run from its out_dir: best epoch from the
 eval_val_ep<N>.json files present (same rule), last epoch = the highest trainable_ep<N>.pt. wandb.id=<run id> resumes
@@ -137,8 +139,9 @@ def main(argv: list[str]):
 
     tokenizer = PromptTokenizer(ckpt)
     t0 = time.time()
+    native_eval = cfg.eval.get("native", True)  # false: train only, keep every epoch; evaluated outside (vLLM)
     splits = {k: encode_samples(load_samples(cfg.data[k], cfg.dataset, cfg.data.limit), model.method, tokenizer)
-              for k in ("train", "val", "test")}
+              for k in (("train", "val", "test") if native_eval else ("train",))}
     if cfg.eval.max_seq_len:  # chain-of-thought rows too long for this method's prompt take a coarser trace
         for k in splits:
             splits[k], changed = fit_cot_window(splits[k], model.method, tokenizer, cfg.eval.max_seq_len)
@@ -208,6 +211,9 @@ def main(argv: list[str]):
                 break
         epoch_time = time.time() - t_epoch
         print(f"epoch {epoch} done in {epoch_time:.0f}s ({step / max(epoch, 1):.0f} steps/epoch)", flush=True)
+        if not native_eval:
+            torch.save(trainable_state(model), os.path.join(out_dir, f"trainable_ep{epoch}.pt"))
+            continue
 
         report = evaluate(cfg, ckpt, model, splits["val"], autocast)
         report |= {"epoch": epoch, "step": step, "epoch_time_s": epoch_time}
@@ -223,6 +229,9 @@ def main(argv: list[str]):
         if cfg.max_steps and step >= cfg.max_steps:
             break
 
+    if not native_eval:
+        wandb.finish()
+        return
     last = {"epoch": epoch, "state": trainable_state(model)} if cfg.eval.test_last_epoch else None
     model.load_state_dict(best["state"], strict=False)
     report = evaluate(cfg, ckpt, model, splits["test"], autocast) | {"best_epoch": best["epoch"], "step": step}

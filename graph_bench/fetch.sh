@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Download the raw sources of the Mimir graph benchmark (wiki: mimir-graph-benchmark-plan) into
+# Download the raw sources of the Mimir graph benchmark (wiki: mimir-graph-benchmark) into
 # data/graphs/bench/raw/<source>/, one empty directory per source, each with a SOURCE.json (urls, date, sha256).
 #   bash graph_bench/fetch.sh all            # or a subset: bash graph_bench/fetch.sh webqsp cwq clutrr
 # Network only (no GPU). Detach the full run: setsid nohup bash graph_bench/fetch.sh all > <log> 2>&1 < /dev/null &
+# Converters (graph_bench/sources/*) run one at a time, under the memory guard (the container has 128 GB, no swap;
+# an out-of-memory kill restarts it with every job, 2026-11-02): bash scripts/graphs/mem_guard.sh 24 -- .venv/bin/python -m ...
 set -euo pipefail
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 RAW=${RAW:-$REPO/data/graphs/bench/raw}

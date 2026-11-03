@@ -1,27 +1,45 @@
 ---
-type: Experiment Plan
-title: Is Mimir v1.5 Best at Graph Reasoning? (Zero-Shot, SFT, RLVR)
-description: "Approved plan for testing whether DFM-Mimir-v1.5 is the strongest graph / KG reasoner, zero-shot and after SFT and RLVR: claim challenges, hypotheses, models, dataset tiers with cleaning rules, splits, arms, feasibility, and the VeRL + vLLM RL stack found in jacob-hrm-text-rlvr."
-tags: [graphs, mimir, rlvr, grpo, vllm, verl, kgqa, benchmark, plan]
+type: Runbook
+title: Mimir v1.5 Graph-Reasoning Benchmark (Zero-Shot, SFT, RLVR)
+description: "Plan (approved 2026-11-02) and implementation log for testing whether DFM-Mimir-v1.5 is the strongest graph / KG reasoner, zero-shot and after SFT and RLVR: claim challenges, hypotheses, models and baselines, datasets, splits, arms and what each is compared with, the VeRL + vLLM RL stack, and the 2026-11-03 fixes, vLLM parity gate and GRPO smoke result."
+tags: [graphs, mimir, rlvr, grpo, vllm, verl, kgqa, benchmark]
 status: draft
-last_updated: 2026-11-02
+last_updated: 2026-11-03
 confidence: medium
 ---
-# Is Mimir v1.5 Best at Graph Reasoning?
+# Mimir v1.5 Graph-Reasoning Benchmark
 
 The question is whether DFM-Mimir-v1.5 is the strongest model for reasoning over graphs and knowledge graphs, in
 three settings: zero-shot, after SFT, and after SFT followed by RLVR. Both in-distribution and held-out tasks
 count. Zero-shot transfer to held-out tasks is the main criterion, because it separates a research-only model from
-a general-purpose one. This page records the plan approved on 2026-11-02 and the reasons for each choice. No
-experiment has run yet.
+a general-purpose one. This page records the plan approved on 2026-11-02, the reasons for each choice, and the
+implementation log that follows it.
 
-- Plan source: the approved plan of 2026-11-02 (Claude Code session).
+- Code: `graph_bench/` (dataset converters in `sources/`, scoring, `eval/eval_vllm.py`, RL in `rl/`). Bench data:
+  `data/graphs/bench/<dataset>/`. MetaQA / KQA Pro gold-only files: [KGQA gold-only rebuild](/pages/hrm-graph/kgqa-gold-rebuild.md).
+- W&B: everything (E0 eval, E1/E2 SFT, E3/E4 GRPO) in project `Mimir-Graph-RLVR`, groups `mimir-bench-<arm>`
+  (since 2026-11-03; only the first smoke run, `iyp11un6`, is in `HRM-Graph`).
+- Run outputs: `/work/dfm/marius-ortega/dfm-hrm-graphs/mimir_bench/` (`e0/`, `e1/`, `e2/`, `sft_*`, `e3_*`, `e4_*`,
+  queue logs); merged models in `/work/dfm/marius-ortega/dfm-hrm-graphs/hf/`.
 - Prior results it builds on: [Graph Reasoning Experiments](/pages/hrm-graph/graph-reasoning-experiments.md),
   [Graph-Structure Injection](/pages/hrm-graph/graph-structure-injection.md),
   [GraphQA Chain of Thought](/pages/hrm-graph/graphqa-cot.md).
 - RL stack: `/work/dfm/marius-ortega/jacob-hrm-text-rlvr/verl_hrm_text/` (VeRL + vLLM). The fallback is
   `/work/dfm/marius-ortega/hrm-text-rlvr/train_grpo.py` (TRL + HF generate).
 - KGQA source loaders (URLs and schemas only): `data/graphs/KGQA/*/`.
+
+## Status (updated 2026-11-03)
+
+| Item | State |
+| --- | --- |
+| Tier 1 data | Converted: GraphQA (+ `test_fresh`, `test_large`), MetaQA and KQA Pro (gold-only), WebQSP, CWQ, CLRS-Text, CLUTRR. Not yet: MetaQA 3-hop is in test only; fresh Wikidata probes not built |
+| Tier 2 data | Raw files downloaded (NLGraph, GraphInstruct, GraphArena, LC-QuAD 2.0, CronQuestions, PathQuestions, Mintaka); no converters. GrailQA not downloaded |
+| vLLM parity gate | Passed after two fixes (tokenizer flag, double `<bos>`); bf16 identical-generation bar waived |
+| RL pipeline (E3 gate) | Passed: 15-step GRPO smoke run, rollout-vs-actor Pearson ≥ 0.999 after the token_type_ids fix |
+| E0 zero-shot matrix | Running since 2026-11-03 16:10 (8 cached models, see [Launch](#launch-of-e0e4-2026-11-03)) |
+| E1 / E2 SFT | Queued (data built; trains when the GPU lock frees) |
+| E3 / E4 / E3b RL | Queued; start when E2's merged model exists |
+| Not covered yet | Ouro (needs its own vLLM venv), IFM and Qwen3-4B / HRM-Text-1B-v3.2 (not downloaded), Tier 2 sets, retention suite (H4), eval of the RL checkpoints |
 
 ## Design (2026-11-02)
 
@@ -200,6 +218,20 @@ Gates:
   the family) before spending SFT and RL compute;
 - before RL: SFT pass@16 must be above 0 on most train prompts.
 
+**What each arm is compared with (clarified 2026-11-03).**
+
+| Comparison | Question it answers | Hypothesis |
+| --- | --- | --- |
+| E0 across models | Zero-shot ranking on held-out tasks | H1 |
+| E2 − E1 (same data and budget, traces vs answers only) | Does training on reasoning traces help? Our earlier results favour v1.5 only with CoT, so the gap per model is part of the claim | H2 |
+| E3 − E2, on held-out and within-task OOD sets | Does RL add zero-shot transfer beyond SFT? This is the main zero-shot-after-RL result | H3 |
+| E3 − E3b | Does RL need the trace SFT first? | ablation |
+| E4 − SFT on the same task's answers, both from E2 | For a new task with answers but no traces, is RL a better adaptation than SFT on answers? E4 trains on the task, so it is adaptation, never zero-shot evidence | – |
+| Retention suite before / after SFT + RL | MMLU, GSM8K, ARC-C, IFEval, Danish (EuroEval): non-graph skills only. OOD graph data belongs to H1–H3 | H4 |
+
+For H3, also report the SFT model's pass@k on the held-out sets: when pass@64 is already high, RL mostly selects
+among answers the model could already produce.
+
 ### Feasibility (one RTX PRO 6000, estimates)
 
 | Item | Estimate |
@@ -211,6 +243,9 @@ Gates:
 | E3 GRPO on Mimir with VeRL + vLLM | ~15–25 h per run with 2–3k-token graph prompts (scaled from GSM8K, below) |
 
 Total: ~5–6 weeks of single-GPU time for the core set, plus ~1 week to validate the RL stack.
+
+Measured since (2026-11-03): Tier 1 conversion took about a day, not a week. Mimir GRPO with eager vLLM, 16 prompts ×
+8 rollouts and up to 1,024 response tokens takes about 6.2 min per step.
 
 ## RL stack: VeRL + vLLM in jacob-hrm-text-rlvr (checked 2026-11-02)
 
@@ -268,8 +303,183 @@ Gaps to close before E3 (CPU work first, GPU checks once the GPU is free):
 Gate for E3: parity holds, the prefill fix is verified, and a 50-step GraphQA-CoT GRPO smoke run with LoRA merge
 shows rising reward and a stable logprob gap.
 
-## Status (2026-11-02)
+**Gap status (2026-11-03)**, details in the implementation log below:
+1. Prefill: `GRAPH_RL_PREFILL` in `graph_bench/rl/verl_ext.py` picks one convention (`none`: no prefill, for E3 / E4;
+   `prompt`: prefill scored as prompt, for E3b).
+2. Parity: holds, after two fixes (tokenizer flag, double `<bos>`).
+3. LoRA merge sync: works. The rollout-vs-actor gap stays at about 0.003 across 15 steps of LoRA updates.
+   `GRAPH_RL_FUSE_SYNC=0` sends separate weight names, for Bifrost.
+4. KV budget: RL prompts are capped at 2,048 tokens by the export; fp8 KV and CUDA graphs are still untested.
+5. Baselines' environments: not started.
+- The E3 gate was met with a 15-step run on GraphQA + MetaQA + KQA Pro (not 50 GraphQA-CoT steps). The rollout-vs-actor
+  gap was stable; the reward gain was mostly answer format.
 
-- The GPU is busy, so only CPU work is approved: dataset download and conversion, trace generators, reward
-  functions and their unit tests, parquet builders, and eval and launch scripts written but not run.
-- E0–E4, the parity gate and all SFT runs wait for the GPU.
+## Implementation log (2026-11-03)
+
+### Out-of-memory crash of 2026-11-02 16:50
+
+- **Symptom.** The container restarted at 16:50:59. It killed every job in it, including the GraphQA-v3 Mimir training
+  at its epoch-8 val step. The user saw two crashes in a row.
+- **Cause (most likely; the kernel counters were reset).** `graph_bench/sources/rog.py --dataset cwq`, started at 16:47
+  next to `clrs.py` and the training.
+  - It ran `pq.read_table(...).to_pylist()` on CWQ train: 8.1 GB of Arrow, about 30 GB of Python objects.
+  - It then forked `Pool(32)` off that heap. Each child copies inherited pages as Python's refcounts and GC write to
+    them.
+  - The container's cgroup limit is **128 GB** (the host has 1 TB; there is no swap). WebQSP, 9× smaller, had passed.
+- **Fix.**
+  - **`rog.py`:** forks its workers before reading anything and streams rows (`iter_batches`, ordered `imap`).
+    CWQ now converts in 3 min at a **4.0 GB peak**.
+  - **`clrs.py`:** streams too (1.4 GB peak).
+  - **`scripts/graphs/mem_guard.sh <cap_GB> -- <cmd>`:** kills the command's process group above the cap, or when the
+    container passes 110 GB, and logs the peak.
+  - **Rule:** converters run one at a time, under the guard.
+- **Also fixed: `rog.py` was not deterministic.** Its output changed from run to run, because set iteration order
+  depends on the per-process string hash seed. With sorted iteration, runs under different `PYTHONHASHSEED`s are
+  byte-identical, and the WebQSP files were rebuilt (same counts).
+
+### RL code fixes (`graph_bench/rl`, `graph_bench/scoring.py`)
+
+- **Reward was 0 for correct answers.** `hrm_verl_ext` makes VeRL decode with `skip_special_tokens=False`, so a
+  completion reaches the reward as `...Answer: Paris<turn|>`, which scored 0. `scoring.extract_answer` now cuts at
+  end-of-turn tokens and turns `<channel|>` into a line break; tests cover both cases.
+- **Ray caps.** `run_grpo_graph.sh` passes `ray_kwargs.ray_init.num_cpus=16` and `object_store_memory=8e9`. Ray would
+  otherwise size its `/dev/shm` store from system memory and see 188 CPUs.
+- **`GRAPH_RL_FUSE_SYNC`** (default 1): weight sync with fused `gqkv_proj` / `gate_up_proj`. Set it to 0 for the
+  Bifrost plugin (`/work/dfm/marius-ortega/Bifrost_vllm`), which only accepts the separate projections.
+
+### vLLM parity gate
+
+- **Backend decision:** native vLLM 0.27.1 `hrm_text`, with Bifrost kept as the reference. Bifrost serves the same
+  prefix-LM contract (prompt bidirectional, no chunked prefill, no prefix caching), but only on vLLM 0.32 and only with
+  the Triton backend.
+- **Setup.** Mimir v1.5 zero-shot, greedy, 96 tokens, on 200-row seeded subsets of GraphQA / MetaQA / KQA Pro test
+  (`data/graphs/bench/parity/`). Native `eval_graphqa.py` against `graph_bench/eval/eval_vllm.py`.
+- **Bug 1: tokenizer.** The DFM-Mimir checkpoints (v1, v1.5, HRM-Mimir-v1) set `"fix_mistral_regex": true`.
+  transformers then prepends a regex pre-tokenizer that `tokenizer.json` does not have (`" Question"` becomes
+  `" "` + `"Question"`).
+  - Effect: 0/600 prompts tokenized as in data_io / the native engine. Everything that loads Mimir through
+    transformers is affected: vLLM, VeRL, probably GRL.
+  - Fix: `graph_bench/eval/hf_view.py` makes a symlinked model dir with the flag set to false (600/600), at
+    `/work/dfm/marius-ortega/dfm-hrm-graphs/hf/DFM-Mimir-v1.5-hfview`.
+  - `eval_vllm.py` now refuses to run when its tokenizer disagrees with `tokenizer.json`.
+- **Bug 2: double `<bos>`.** vLLM tokenizes text prompts with `add_special_tokens=True`, so the chat template's `<bos>`
+  got a second one in front. `eval_vllm.py` now sends token ids.
+- **Result after both fixes.**
+  - vLLM in **fp32** gives the HF fp32 argmax as first token on every prompt, except one tie at 0.004 logits. The
+    five other apparent misses were artefacts of re-tokenizing the decoded text. So the vLLM implementation is exact.
+  - In bf16:
+
+| 200-row subset | Identical generations | acc native | acc vLLM |
+| --- | --- | --- | --- |
+| GraphQA | 0.885 | 0.455 | 0.445 |
+| MetaQA | 0.995 | 0.785 | 0.790 |
+| KQA Pro | 0.890 | 0.460 | 0.460 |
+
+- **Reading of the bf16 numbers.**
+  - The two engines' bf16 kernels round differently, which flips near-tied argmaxes (zero-shot count answers, for
+    example).
+  - The 95% identical-generation bar set in the plan is too strict for that, and was waived (2026-11-03).
+  - Rule: compare scores within one engine only.
+### GRPO smoke run
+
+**Run.** W&B `HRM-Graph/iyp11un6` (`smoke_grpo_graph`), driver `/work/dfm/marius-ortega/dfm-hrm-graphs/grpo_smoke/run_smoke.sh`.
+- Model: zero-shot Mimir v1.5 + LoRA r32 (`DFM-Mimir-v1.5-hfview`), 15 steps.
+- Batch: 16 prompts × 8 rollouts, responses up to 1,024 tokens, eager vLLM.
+- Data: `data/graphs/bench/verl_smoke`, exported from the gold-only files: 2,086 train / 208 val prompts over
+  GraphQA, MetaQA and KQA Pro, at most 2,048 prompt tokens.
+
+**Bug that made the first attempt wrong: token_type_ids misaligned.**
+- **Symptom.** Step 1: `training/rollout_probs_diff_mean` 0.155, rollout-vs-actor Pearson 0.77, `rollout_corr/k3_kl`
+  696. A correct setup gives about 0.01 / > 0.99 / about 0.
+- **Cause.** `jacob-hrm-text-rlvr/verl_hrm_text/hrm_verl_ext.py` injects the PrefixLM `token_type_ids` into the FSDP
+  passes, but verl 0.9 hands it a nested `response_mask` holding only each row's response. The patch pads that mask
+  on the right to the full row.
+  - So the causal marks land on the first prompt tokens, and the response stays bidirectional.
+  - Seen with a debug hook: a row of 1,129 real tokens with a 128-token response got `0x128 1x1001` instead of
+    `1x1001 0x128`.
+- **Fix.** `graph_bench/rl/verl_ext.py` installs its own `prepare_model_inputs`, which marks each row's last
+  len(response) valid tokens causal. `GRAPH_RL_DEBUG_TTI=1` prints the layout of the first batches.
+- **Result after the fix.** Prob diff 0.0028, Pearson 0.99985, k3_kl 0.0003.
+- **Likely affects Jacob's GSM8K GRPO runs.** Same verl 0.9 install, same patch, but `grpo_run_v13.log` has no
+  rollout-vs-actor metric, so this is unverified.
+
+**Launch fixes**, all in `run_grpo_graph.sh`:
+- **Ray startup:** the raylet timed out waiting for its runtime-env agent. Fix: `RAY_agent_register_timeout_ms`,
+  `RAY_raylet_start_wait_time_s`, dashboard off.
+- **W&B:** miniforge's wandb 0.30 defaults to api.wandb.ai, while `~/.netrc` only has the CoreWeave key. Fix:
+  `WANDB_BASE_URL=https://api.forge.coreweave.com`.
+- **Stale checkpoint:** VeRL auto-resumes from `default_local_dir` (a 1-step debug run "finished" instantly on an old
+  checkpoint). Smoke and debug runs pass `trainer.resume_mode=disable`.
+
+**Result.** Val subsets of 68–70 questions per dataset (SE ~5–6 pt).
+
+| Val (greedy) | acc step 0 → 15 | has "Answer:" line 0 → 15 | acc among answers with the line, 0 → 15 |
+| --- | --- | --- | --- |
+| KQA Pro | 0.29 → 0.69 | 0.37 → 0.94 | 0.80 → 0.73 |
+| GraphQA | 0.43 → 0.53 | 0.70 → 0.87 | 0.61 → 0.61 |
+| MetaQA | 0.70 → 0.87 | 0.73 → 0.89 | 0.96 → 0.98 |
+
+- **Pipeline passes the gate.**
+  - Rollout-vs-actor prob diff 0.003–0.0045 and Pearson ≥ 0.999 on every step.
+  - About 6.2 min per step (generation about half).
+  - No OOM kill; about 45–49 GB anonymous host memory, of which the 10 agent-loop workers take about 2 GB each.
+  - The only tracebacks are DataLoader workers killed at shutdown.
+- **The validation gain is answer format, not reasoning.** Accuracy among answers that have an "Answer:" line did not
+  improve. Train reward (`critic/score/mean`) is noisy: 0.52 at step 1, 0.57–0.59 at steps 14–15. The real E3 runs
+  start from an SFT model that already emits the format.
+- **To watch in longer runs.**
+  - Entropy rose from 2.4 to 3.0.
+  - Responses got longer (253 → 337 tokens), and the share cut at 1,024 tokens rose from 7% to 12–16%.
+
+**Next:**
+1. SFT data from the gold-only files.
+2. E1 / E2 LoRA SFT.
+3. E3 GRPO from E2, in W&B `Mimir-Graph-RLVR`.
+
+## Launch of E0–E4 (2026-11-03)
+
+**Decisions (user, 2026-11-03).**
+- E0 uses cached models only: Mimir v1.5, Mimir v1, Qwen3.5-4B (stands in for Qwen3-4B), Qwen2.5-7B-Instruct,
+  Olmo-3-7B-Instruct, Gemma-4-E4B-it, SmolLM3-3B, HRM-Text-1B (base). Phi-4-mini's cache is empty, so it is out.
+- E4's held-out task is CLUTRR (already converted, short prompts), not CronQuestions.
+- SFT replay is dfm-dyna-instruct's `apertus-sft-mixture` config, read from the local copy
+  `/work/dfm/Mimir/MTCv1/data/dfm7_special_sources/dfm_dyna_instruct_apertus_sft_mixture_shards` (no download).
+- Every run of the benchmark logs to W&B `Mimir-Graph-RLVR`.
+
+**Protocol choices.**
+- **One prompt for everything.** E0, SFT and GRPO all use the instruct message (`export_verl.user_message`: reason,
+  then an `Answer:` line), thinking off. SFT prompts tokenize exactly as the vLLM eval prompts (200/200 checked).
+- **Eager vLLM for every eval.** CUDA graphs are 25% faster, but only 42/128 long generations were identical to
+  eager (accuracy 20 vs 21 of 64). VeRL rollouts and the parity gate use eager, so scores stay in one engine setting.
+- **Mimir's context is 4,096 tokens.** `eval_vllm.py` now shortens the generation budget of a prompt that does not
+  leave room for `--max-tokens`; with fewer than 16 tokens left, the row is not generated and scores 0 (it stays in
+  the denominator).
+- **E1 and E2 train on the same questions.** Rows without a trace are dropped from both (WebQSP: 2,004 of 2,826), so
+  only the target differs: `Answer: X.` vs trace + `Answer: X.`
+- **Epoch selection:** the last epoch (3), no val-based selection.
+
+**Data** (`data/graphs/bench/sft/`, `verl/`, `verl_clutrr/`):
+
+| Set | Rows |
+| --- | --- |
+| SFT mixture (E1 `train_answer`, E2 `train_cot`) | 17,917: GraphQA 3,648, MetaQA 2,588, KQA Pro 3,377, WebQSP 2,004, CLRS 3,700 (cap), replay 2,600 (14.5%) |
+| GRPO train / val (E3, E3b) | 16,055 / 298, prompts ≤ 2,048 tokens (84 dropped) |
+| GRPO CLUTRR train / val (E4) | 12,064 / 300 |
+| E4 SFT control | CLUTRR train, answer line only |
+
+**Queues** (each takes the GPU lock per run and skips finished runs):
+
+| Driver | What | Estimate |
+| --- | --- | --- |
+| `graph_bench/eval/run_e0.sh` | 8 models × (12 named test files + 4 anonymised KGQA files), up to 1,000 rows per file, greedy, 1,024 tokens | Mimir about 1.5 h for the named files (1.85 prompts/s) |
+| `graph_bench/run_sft.sh` | merge check, then E1 and E2: graph_inject LoRA r16, 3 epochs, 8,192 tokens/step, last epoch merged into an HF dir (`graph_bench/merge_lora_hf.py`), eval like E0, E2 pass@16 on val and held-out subsets | about 1.5 h of training per arm (from earlier Mimir LoRA runs: 1.2 steps/s) |
+| `graph_bench/rl/run_rl_arms.sh` | after E2's merge: E3 (GRPO from E2, 200 steps), E4 (GRPO on CLUTRR from E2, 100 steps; then LoRA SFT on CLUTRR answers from E2), E3b (GRPO from base, 200 steps) | about 21 h per 200 GRPO steps (6.2 min/step in the smoke run) |
+
+- **GRPO settings:** 16 prompts × 8 rollouts, LoRA r32, val every 25 steps, checkpoints every 50. DAPO
+  `filter_groups` drops all-0 / all-1 groups online, which applies the plan's "pass rate strictly between 0 and 1"
+  rule without a separate pass@k filtering pass.
+- **Merge check:** a GraphQA LoRA with a known native test score (0.842) is merged and run through vLLM on the
+  200-row parity subset before the SFT runs.
+- **Still to do:** convert the VeRL checkpoints (LoRA) to HF dirs and evaluate them like E0; the retention suite;
+  the remaining baselines.
+

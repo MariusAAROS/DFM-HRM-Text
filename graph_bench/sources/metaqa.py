@@ -1,5 +1,8 @@
 """MetaQA -> bench records with hop-by-hop traces (Tier 1; 1-2 hop train, 3-hop = within-task OOD depth).
 
+Outputs (gold-only layout, 2026-11-03): train / val = gold rows of 1-2 hop questions, test = gold rows of every depth,
+test_retrieved = the retrieved-arm test rows (meta.answer_in_prompt), an eval condition only.
+
 Rows are GRL's (data/graphs/metaqa/baseline-grl, single-answer questions, `gold` and `retrieved` subgraphs), so
 test is the same 1,197 questions as the earlier MetaQA runs. The Graph-Representation-Learning-for-LLM generator is
 re-run with its seed only to recover each row's question record (topic entity, relation chain from the qtype): its
@@ -168,7 +171,27 @@ def main():
             if prompt_text(rec) != b["question"]:
                 raise SystemExit(f"{rec.id}: rendered prompt differs from the baseline question; stop")
             recs.append(rec)
-        write_records(recs, OUT / f"{split}.jsonl")
+        # Gold-only layout (wiki: kgqa-gold-rebuild): the retrieved arm is an eval condition (test_retrieved), never
+        # trained; 3-hop is the within-task OOD depth split (test only); a gold row whose walk does not give exactly
+        # the gold is a homonym-title ambiguity of the KB (two "Scent of a Woman" films are one node) and is dropped.
+        out = []
+        for rec in recs:
+            if rec.meta["algorithm"] == "retrieved":
+                if split == "test":
+                    nodes = {x for f in rec.facts for x in (f[0], f[2])}
+                    rec.meta["answer_in_prompt"] = all(a in nodes for a in rec.answers)
+                    rec.split = "test_retrieved"
+                    out.append(rec)
+                continue
+            if rec.trace is None:
+                stats[f"{split}_gold_dropped_ambiguous"] += 1
+            elif split != "test" and rec.task == "3hop":
+                stats[f"{split}_gold_dropped_3hop"] += 1
+            else:
+                out.append(rec)
+        for name in (split, "test_retrieved") if split == "test" else (split,):
+            part = [r for r in out if r.split == name]
+            stats[f"{name}_written"] = write_records(part, OUT / f"{name}.jsonl")
     print(json.dumps(dict(sorted(stats.items())), indent=1))
 
 

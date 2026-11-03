@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# GRPO on the graph sets with VeRL + vLLM (arms E3 / E3b / E4 of wiki: mimir-graph-benchmark-plan).
+# GRPO on the graph sets with VeRL + vLLM (arms E3 / E3b / E4 of wiki: mimir-graph-benchmark).
 # Adapted from /work/dfm/marius-ortega/jacob-hrm-text-rlvr/verl_hrm_text/run_grpo_hrm_text.sh.
 #
 # Not yet run: the §7a gate (vLLM parity, prefill convention, LoRA merge sync) comes first. Smoke test:
@@ -15,6 +15,8 @@ JACOB=${JACOB:-/work/dfm/marius-ortega/jacob-hrm-text-rlvr}
 PY=${PY:-/home/ucloud/miniforge3/bin/python3}
 export PYTHONPATH="$REPO:$JACOB${PYTHONPATH:+:$PYTHONPATH}"
 export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
+# miniforge has wandb 0.30, which defaults to api.wandb.ai; ~/.netrc only holds the CoreWeave key (0.31 in .venv defaults to it)
+export WANDB_BASE_URL=${WANDB_BASE_URL:-https://api.forge.coreweave.com}
 
 MODEL_PATH=${MODEL_PATH:-danish-foundation-models/DFM-Mimir-v1.5}
 TRAIN_FILE=${TRAIN_FILE:-$REPO/data/graphs/bench/verl/train.parquet}
@@ -23,8 +25,9 @@ TEST_FILE=${TEST_FILE:-$REPO/data/graphs/bench/verl/val.parquet}
 # none: no thought prefill (policy SFT'd on plain-response traces, E3/E4); prompt: prefill scored as prompt (E3b).
 export GRAPH_RL_PREFILL=${GRAPH_RL_PREFILL:-none}
 export GRAPH_REWARD=${GRAPH_REWARD:-acc}
+export GRAPH_RL_FUSE_SYNC=${GRAPH_RL_FUSE_SYNC:-1}  # 0 for the Bifrost vLLM plugin (separate weight names)
 
-PROJECT_NAME=${PROJECT_NAME:-HRM-Graph}
+PROJECT_NAME=${PROJECT_NAME:-Mimir-Graph-RLVR}  # RL runs have their own W&B project (SFT / eval stay in HRM-Graph)
 EXPERIMENT_NAME=${EXPERIMENT_NAME:-grpo_graph}
 
 TRAIN_BATCH_SIZE=${TRAIN_BATCH_SIZE:-32}
@@ -46,8 +49,16 @@ TEST_FREQ=${TEST_FREQ:-25}
 TOTAL_EPOCHS=${TOTAL_EPOCHS:-1}
 TOTAL_TRAINING_STEPS=${TOTAL_TRAINING_STEPS:-null}
 EXTRA_VERL_ARGS=${EXTRA_VERL_ARGS:-}
+# Host-RAM caps: the container has 128 GB (cgroup, no swap; an OOM restarts it and kills every job). Ray would
+# otherwise size its object store (on /dev/shm, counted in the cgroup) from system memory and see all 188 CPUs.
+RAY_OBJ_STORE=${RAY_OBJ_STORE:-8000000000}
+RAY_CPUS=${RAY_CPUS:-16}
+# Ray helper processes can start slowly here: the raylet timed out waiting for its runtime-env agent (2026-11-03).
+export RAY_agent_register_timeout_ms=${RAY_agent_register_timeout_ms:-300000}
+export RAY_raylet_start_wait_time_s=${RAY_raylet_start_wait_time_s:-300}
 
 echo "[grpo_graph] model=$MODEL_PATH prefill=$GRAPH_RL_PREFILL reward=$GRAPH_REWARD train=$TRAIN_FILE"
+echo "[grpo_graph] container memory at start: $(( $(cat /sys/fs/cgroup/memory.current) / 1000000000 )) GB of $(( $(cat /sys/fs/cgroup/memory.max) / 1000000000 )) GB"
 
 cd "$REPO"
 "$PY" -m verl.trainer.main_ppo \
@@ -109,4 +120,7 @@ cd "$REPO"
   trainer.test_freq=${TEST_FREQ} \
   trainer.total_epochs=${TOTAL_EPOCHS} \
   trainer.total_training_steps=${TOTAL_TRAINING_STEPS} \
+  ray_kwargs.ray_init.num_cpus=${RAY_CPUS} \
+  +ray_kwargs.ray_init.object_store_memory=${RAY_OBJ_STORE} \
+  +ray_kwargs.ray_init.include_dashboard=False \
   ${EXTRA_VERL_ARGS}

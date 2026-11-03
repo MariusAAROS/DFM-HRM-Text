@@ -82,6 +82,9 @@ Results from the old stack are not used for comparisons any more.
 - **W&B: every run goes to project `HRM-Graph`**. `wandb_group` names the experiment (graphqa, graphqa-fullbp,
   recursion-hyp, graphqa-hrm1b, ...), `job_type` is train or eval, bench runs use group `<experiment>-bench`.
   `wandb_tags` is also available. The old per-experiment projects (HRM-GraphQA-*, *-eval) are history.
+- **W&B for the Mimir graph benchmark** (`graph_bench/`: E0 eval, E1/E2 SFT, E3/E4 GRPO): project **`Mimir-Graph-RLVR`**,
+  never HRM-Graph (user's rule, 2026-11-03). Groups `mimir-bench-<arm>`; eval reports are uploaded by
+  `graph_bench/eval/log_wandb.py --watch`. The first smoke run (`smoke_grpo_graph`, `iyp11un6`) is still in HRM-Graph.
 - `lr_auto: false` keeps the old single-LR recipe. The new stack's default (`true`) divides the H/L LRs by
   their backward call counts.
 - Old → new keys: `resume_from` → `resume_checkpoint_path`; `compile_scope=step|block` →
@@ -182,6 +185,12 @@ bash scripts/graphs/run_graphqa_scaled.sh
 - In-training validation (`data.validation_path`): every validation call restarts the val iterator, which moves to the
   next `epoch_N/` dir. Sample the val set with at least one epoch per validation call, and set `validation_batches`
   above its batch count, or alternate calls score a leftover fragment.
+- Host RAM: the container's cgroup limit is 128 GB (the host shows 1 TB), with no swap. One out-of-memory kill restarts the
+  container and every job in it (2026-11-02). Run CPU converters one at a time under
+  `bash scripts/graphs/mem_guard.sh <cap_GB> -- <cmd>`, and never load a whole large parquet table and then fork a pool.
+- DFM-Mimir HF checkpoints set `fix_mistral_regex: true`, so transformers / vLLM / VeRL tokenize differently from data_io and
+  the native engine. Load them through a `python -m graph_bench.eval.hf_view <snapshot> <out>` dir. Give vLLM token ids,
+  not text: text prompts get a second `<bos>`.
 - Pre-existing test failures, unrelated to graphs: `tests/test_gradient_skip.py` (2 failures; the config stub
   lacks `experiment_update_probe_interval`), tests that need `psutil` (handoff, `test_training_safety.py`), and
   `tests/test_hf_export_rope.py` (imports `eval_scheduler.runtime`, absent from this checkout).

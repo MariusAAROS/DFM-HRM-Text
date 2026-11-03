@@ -1,6 +1,6 @@
 """CLUTRR (gen_train234_test2to10) -> bench records over the kinship graph, with the proof as trace.
 
-Tier 1, far-OOD held-out task (wiki: mimir-graph-benchmark-plan): kinship composition, a skill no train set covers;
+Tier 1, far-OOD held-out task (wiki: mimir-graph-benchmark): kinship composition, a skill no train set covers;
 train chains have 2-4 edges, test 2-10, so test also measures length generalisation (task = "k<n>" edges).
 
 The prompt is the graph form, not the story: one fact per story edge, "(A, son, B)" meaning B is the son of A

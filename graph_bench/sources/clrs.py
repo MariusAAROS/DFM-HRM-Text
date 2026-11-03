@@ -1,6 +1,6 @@
 """CLRS-Text (smcleish/CLRS-Text-train/-test), graph algorithms only -> bench records with the native traces.
 
-Tier 1 (wiki: mimir-graph-benchmark-plan): train on small graphs, test both on the train sizes (test.jsonl) and on
+Tier 1 (wiki: mimir-graph-benchmark): train on small graphs, test both on the train sizes (test.jsonl) and on
 larger ones (test_ood.jsonl, within-task OOD size). The 12 graph algorithms: bfs, dfs, dijkstra, bellman_ford,
 mst_prim, mst_kruskal, topological_sort, articulation_points, bridges, strongly_connected_components,
 dag_shortest_paths, floyd_warshall.
@@ -18,6 +18,8 @@ import random
 from collections import Counter, defaultdict
 from pathlib import Path
 
+import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 from graph_bench.schema import Record, write_records
@@ -96,13 +98,20 @@ def fits(p: dict, row: dict) -> bool:
     return len(row["question"]) <= MAX_PROMPT_CHARS and len(row["answer"]) <= MAX_ANSWER_CHARS
 
 
+def _rows(path):
+    """Stream rows of the graph algorithms (never the whole table: see rog.py, the 2026-11-02 out-of-memory crash)."""
+    for batch in pq.ParquetFile(path).iter_batches(batch_size=4096, columns=["question", "answer", "algo_name"]):
+        batch = batch.filter(pc.is_in(batch.column("algo_name"), value_set=pa.array(ALGOS)))
+        yield from batch.to_pylist()
+
+
 def main():
     rng = random.Random(0)
     stats = Counter()
     # train / val: from the train shards, n <= TRAIN_MAX_N, disjoint samples per algorithm
     pools = defaultdict(list)
     for f in sorted(glob.glob(str(RAW / "train/data/*.parquet"))):
-        for row in pq.read_table(f).to_pylist():
+        for row in _rows(f):
             if row["algo_name"] in ALGOS:
                 p = parse(row)
                 stats["malformed"] += p is None
@@ -123,7 +132,7 @@ def main():
     train_inputs = {p["inputs"] for p in train} | {p["inputs"] for p in val}
     # test (train sizes) / test_ood (larger): from test_1
     tests = {"test": defaultdict(list), "test_ood": defaultdict(list)}
-    for row in pq.read_table(RAW / "test/data/test_1-00000-of-00001.parquet").to_pylist():
+    for row in _rows(RAW / "test/data/test_1-00000-of-00001.parquet"):
         if row["algo_name"] not in ALGOS:
             continue
         p = parse(row)
