@@ -17,6 +17,10 @@ earliest, as scripts/graphs/run_graphqa_hrm1b.sh) is evaluated on test. Outputs 
 config.yaml, eval_val_ep<N>.json, eval_test.json, best_trainable.pt (trainable params only).
 eval.test_last_epoch also evaluates the final epoch's weights on test (eval_test_last.json, selection-free);
 eval.save_every_epoch keeps every epoch's trainable params (trainable_ep<N>.pt).
+
+test_only=true skips training and runs the test stage of an interrupted run from its out_dir: best epoch from the
+eval_val_ep<N>.json files present (same rule), last epoch = the highest trainable_ep<N>.pt. wandb.id=<run id> resumes
+the original W&B run instead of starting a new one.
 """
 import json
 import math
@@ -114,8 +118,10 @@ def main(argv: list[str]):
     if cfg.dataset != "graphqa":  # the GraphQA phase-1 names stay as they were
         run_name = f"{cfg.dataset}-{run_name}"
     out_dir = os.path.join(cfg.out_root, cfg.model.name, f"{cfg.method.name}_s{cfg.seed}")
+    test_only = cfg.pop("test_only", False)
     os.makedirs(out_dir, exist_ok=True)
-    OmegaConf.save(cfg, os.path.join(out_dir, "config.yaml"))
+    if not test_only:
+        OmegaConf.save(cfg, os.path.join(out_dir, "config.yaml"))
     print(OmegaConf.to_yaml(cfg), flush=True)
 
     set_accelerator_type(cfg.accelerator_type)
@@ -153,9 +159,28 @@ def main(argv: list[str]):
     wandb.init(project=cfg.wandb.project, group=cfg.wandb.group, name=run_name, job_type="train",
                tags=[cfg.dataset, cfg.model.name, cfg.method.name, cfg.regime], mode=cfg.wandb.mode,
                config=OmegaConf.to_container(cfg, resolve=True) | {"trainable_params": n_trainable,
-                                                                    "method_params": n_method})
+                                                                    "method_params": n_method},
+               id=cfg.wandb.get("id"), resume="must" if cfg.wandb.get("id") else None)
 
     step, best = 0, None
+    if test_only:
+        select = cfg.eval.select_metric
+        for epoch in range(1, cfg.epochs + 1):
+            path = os.path.join(out_dir, f"eval_val_ep{epoch}.json")
+            if not os.path.exists(path):
+                break
+            with open(path) as f:
+                report = json.load(f)
+            step = report["step"]
+            if best is None or report[select] > best[select]:
+                best = {"epoch": epoch, select: report[select]}
+        best["state"] = torch.load(os.path.join(out_dir, f"trainable_ep{best['epoch']}.pt"))
+        epoch = max(int(n[len("trainable_ep"):-3]) for n in os.listdir(out_dir) if n.startswith("trainable_ep"))
+        step = max(step, wandb.run.step)  # W&B rejects steps below the resumed run's last one
+        print(f"test only: best epoch {best['epoch']} ({select}={best[select]:.4f}), last epoch {epoch}", flush=True)
+        cfg.epochs = 0
+        if cfg.eval.test_last_epoch:
+            model.load_state_dict(torch.load(os.path.join(out_dir, f"trainable_ep{epoch}.pt")), strict=False)
     for epoch in range(1, cfg.epochs + 1):
         rng = np.random.default_rng([cfg.seed, epoch])
         t_epoch = time.time()

@@ -4,7 +4,7 @@ title: GraphQA v3
 description: "graphqa_v3_cot (built 2026-11-02): graphqa_v2_cot with exact train duplicates removed and extra isomorphism-deduplicated large TriangleCounting / MaximumFlow train rows, val/test unchanged; records the evidence and the reason for each change."
 tags: [graphs, graphqa, chain-of-thought, counting, max-flow, mimir, data]
 status: stable
-last_updated: 2026-11-02
+last_updated: 2026-11-03
 confidence: high
 ---
 # GraphQA v3
@@ -133,3 +133,41 @@ Measured on `graphqa_v2_cot` and the Mimir v1.5 `text` runs:
 - **Prompt format check:** GraphQA's adjacency encoder (`graph_text_encoder.encode_graph`) reproduces 686 of 700 v1
   TriangleCounting/MaximumFlow prompts exactly. The other 14 differ only in edge order, from the node insertion order of
   the check's rebuilt graphs.
+
+## Result: Mimir v1.5 `text`, seed 0 (2026-11-02)
+
+W&B run `oh5c7d74` (project `Graph-Positional-Encoding-Exploration`, group `graphqa-v3-cot-inject`), out dir
+`/work/dfm/marius-ortega/dfm-hrm-graphs/graph_inject_graphqa_v3_cot/mimir/text_s0`.
+
+- **Interrupted at epoch 8 of 10:** the process was killed during the epoch-8 val eval (no Python traceback; the
+  container restarted). Val JSONs and `trainable_ep<N>.pt` exist for epochs 1–7; epochs 8–10 are lost.
+  - The trainer's own host RAM is small (2–4 GB RSS, container peak 18 GB during the test rerun, limit 128 GB), so the
+    out-of-memory kill most likely came from another process. Not confirmed: the kernel counters were reset.
+- **Test without retraining:** `test_only=true wandb.id=<run id>` (new in `graph_inject/train.py`) picks the best epoch
+  from the existing `eval_val_ep<N>.json` (same rule), tests it, and tests the highest `trainable_ep<N>.pt` as the
+  "last" epoch. Results land on the original W&B run.
+- **Val is saturated:** greedy_acc 0.982 at epoch 1, 1.0 at epochs 2–3, 0.982 at epochs 4–7 (55-question subset). The
+  earliest tie wins, so epoch 2 is selected.
+
+Test greedy_acc (full test set; v2-CoT = the `text` runs on `graphqa_v2_cot`, at their selected epochs 7 / 9 / 5):
+
+| | v3 ep2 (selected) | v3 ep7 (last saved) | v2 s0 | v2 s1 | v2 s2 |
+|---|---:|---:|---:|---:|---:|
+| greedy_acc | **0.975** | **0.991** | 0.966 | 0.960 | 0.954 |
+| tf_em | 0.941 | 0.966 | 0.932 | 0.938 | 0.920 |
+| TriangleCounting | 0.889 | 0.963 | 0.778 | 0.778 | 0.704 |
+| TriangleCounting > 20 triangles | 8/11 | 10/11 | 6/11 | 6/11 | 4/11 |
+| MaximumFlow | 0.882 | 0.941 | 0.853 | 0.794 | 0.794 |
+| MaximumFlow > 8 paths | 7/9 | 7/9 | 5/9 | 4/9 | 5/9 |
+| other 9 tasks | 1.00 except DisconnectedNodes 0.975 | 1.00 | 1.00 | 1.00 | 1.00 |
+
+Buckets: TriangleCounting by the gold total, MaximumFlow by the number of `Path N:` lines in the gold trace.
+
+- **Success criteria** (Run plan above): met at both epochs on the large-instance buckets, which rise by more than
+  the v2 seed spread. The saturated tasks stay at 1.00 at epoch 7. At epoch 2 one DisconnectedNodes question is missed.
+- **Limits:**
+  - one seed;
+  - the buckets have 11 and 9 questions;
+  - the "last" epoch is 7, not the planned 10;
+  - v2-CoT has no last-epoch test, so the ep7 column has no exact v2 counterpart.
+- **Next:** seeds 1 and 2 on v3.
