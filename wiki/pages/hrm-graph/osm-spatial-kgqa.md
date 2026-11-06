@@ -174,4 +174,33 @@ rules disagreeing with gold (6.6k).
 - No training run yet. Evaluation needs `--max_generation` ≥ the longest `|`-joined answer list, and
   `--max_tokens` ≥ 3,000 plus the generation length.
 - Shortcut accuracy is still 0.40–0.56 at depths 2–4, because hop distractors cannot be found for every
-  question.
+  question. See the next section: this is a known limitation and is not filtered for now.
+
+## Known limitation: about half the multi-hop rows don't need their inner hops (2026-11-06)
+
+**Shortcut.** It checks only the outermost hop and accepts any link of the right relation type to the previous
+hop, without checking that the linked entity is valid. When its answer equals the gold answer, the question can be
+solved without the chain. `needs_inner_hops` = the shortcut is wrong, as computed by
+[`check_kgqa.py`](../../../scripts/osm/check_kgqa.py) `solve_from_prompt(rec, shortcut=True)`.
+
+| split | 2 hops | 3 hops | 4 hops |
+| --- | --- | --- | --- |
+| train | 2,660 / 5,000 (53%) | 3,124 / 5,000 (62%) | 2,822 / 5,000 (56%) |
+| val | 124 / 250 (50%) | 153 / 250 (61%) | 135 / 250 (54%) |
+| test | 218 / 500 (44%) | 298 / 500 (60%) | 275 / 500 (55%) |
+
+**Why it happens.** When every other final-hop candidate already fails on its own attributes or named anchors,
+the answer is the only entity left in the last hop. Example: test qid 639761, where the only other hotel lacks
+"no outdoor seating".
+
+**Example that needs the chain.** Test qid 431362: Ambroise Paré satisfies its own hop, but its "to the west of"
+link goes to an invalid ?x2. Both are drawn in [`notebooks/osm.ipynb`](../../../notebooks/osm.ipynb) §12.
+
+**Decision (user, 2026-11-06).** The dataset is **not** filtered on this for now. Every score on
+`data/osm/kgqa` should therefore be read with the limitation in mind: on 2–4-hop rows, a model can be right
+without following the chain.
+
+**Fixes considered, if needed later:**
+- **Filter:** keep only `needs_inner_hops` rows at depths 2–4. The builder would scan about twice as many
+  candidates to fill the same quotas.
+- **Tag:** add a `needs_inner_hops` field and report test scores on all rows and on that subset.
