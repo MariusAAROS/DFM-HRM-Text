@@ -165,17 +165,29 @@ def build_sample(item):
         # hop distractors: everything at this hop holds except the hop relation (checked against the full previous
         # answer set), and they are linked to an *invalid* previous-hop POI that we describe. Without them a
         # model can skip the inner hops (pick any entity with a link of the right relation type).
+        # Candidates come from the FULL map (not only near the path). Each is linked to any invalid POI in range
+        # of the hop relation, preferring one with the previous hop's attributes (harder), else any category
+        # (the shortcut accepts any link, so that already defeats it).
         if i and ARGS.hop_miss:
             hop_j = next(j for j, c in enumerate(lvl.clauses) if K.SUB in c.anchors)
-            others = np.delete(np.arange(n), hop_j)
-            cand = pool[attr_ok & truth[:, others].all(1) & ~truth[:, hop_j]]
+            hop_c = lvl.clauses[hop_j]
+            cand = np.flatnonzero(K.attribute_mask(KG, lvl.attrs))
+            cand = cand[[(r not in full) and UNIQUE[r] and names[r] not in anchor_set for r in cand]]
+            for j, c in enumerate(lvl.clauses):
+                if j != hop_j and len(cand):
+                    cand = cand[K.holds(KG, c, cand, sub_full)]
+            if len(cand):
+                cand = cand[~K.holds(KG, hop_c, cand, sub_full)]
             prev_lvl, prev_full = chain[i - 1], set(levels[i - 1].tolist())
+            reach = (hop_c.param if hop_c.kind == "within" else K.NEAR_M) + 1
+            prev_attr = K.attribute_mask(KG, prev_lvl.attrs)
             added = 0
             for h in rng.permutation(cand):
-                near = np.array(KG.tree.query_ball_point(KG.xy[h], ARGS.distractor_radius), dtype=int)
-                near = near[[(r not in prev_full) and UNIQUE[r] and names[r] not in anchor_set for r in near]]
-                near = near[K.attribute_mask(KG, prev_lvl.attrs)[near]]  # right attributes, fails a clause
-                link = next((r for r in rng.permutation(near) if pair_holds(lvl.clauses[hop_j], h, r)), None)
+                near = np.array(KG.tree.query_ball_point(KG.xy[h], reach), dtype=int)
+                near = near[[(r != h) and (r not in prev_full) and (r not in full) and UNIQUE[r]
+                             and names[r] not in anchor_set for r in near]]
+                near = np.concatenate([rng.permutation(near[prev_attr[near]]), rng.permutation(near[~prev_attr[near]])])
+                link = next((r for r in near if pair_holds(hop_c, h, r)), None)
                 if link is None:
                     continue
                 described[i] = np.union1d(described[i], [h])

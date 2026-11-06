@@ -128,6 +128,9 @@ On `df_dump_question` (800 questions):
     to an *invalid* previous-hop POI, which is described too.
 - **Why hop distractors:** without them, a shortcut that checks only the outermost hop and accepts any link
   of the right relation type scored 0.81 on depth-2–4 test questions. With them it scores 0.40–0.56.
+  Superseded (2026-11-06): the hop distractors now come from the whole map and may link to any invalid POI.
+  The shortcut scores 0.21–0.26 on test; see
+  [Hop-distractor fix](#hop-distractor-fix-and-where-the-remaining-shortcuts-come-from-2026-11-06).
 
 **Filters, in order.** 16% of the 174k candidates were kept:
 - the outer filter is stated in the text;
@@ -157,6 +160,9 @@ rules disagreeing with gold (6.6k).
 | val | 1,000 | 51.5 | 946 / 2,634 | 1.64 | 69.7% | 0.50 / 0.39 / 0.46 |
 | test | 2,000 | 54.2 | 995 / 2,992 | 1.62 | 70.9% | 0.56 / 0.40 / 0.45 |
 
+Superseded (2026-11-06): these are the first build's numbers; the data was rebuilt after the hop-distractor fix
+(table in the last section).
+
 - **No overlap:** no innermost sub-question or question is shared between splits.
 - **Derivable:** a symbolic solver that reads only the fact lines and the question returns exactly `answers`
   for 23,000 of 23,000 rows.
@@ -174,7 +180,9 @@ rules disagreeing with gold (6.6k).
 - No training run yet. Evaluation needs `--max_generation` ≥ the longest `|`-joined answer list, and
   `--max_tokens` ≥ 3,000 plus the generation length.
 - Shortcut accuracy is still 0.40–0.56 at depths 2–4, because hop distractors cannot be found for every
-  question. See the next section: this is a known limitation and is not filtered for now.
+  question. See the next section: this is a known limitation and is not filtered for now. Superseded
+  (2026-11-06): 0.21–0.26 after the hop-distractor fix, and what remains is caused by the dataset (last
+  section).
 
 ## Known limitation: about half the multi-hop rows don't need their inner hops (2026-11-06)
 
@@ -193,6 +201,9 @@ solved without the chain. `needs_inner_hops` = the shortcut is wrong, as compute
 the answer is the only entity left in the last hop. Example: test qid 639761, where the only other hotel lacks
 "no outdoor seating".
 
+Superseded (2026-11-06): these shares and the explanation are from the first build. The cause was split into a
+builder part (fixed) and a dataset part (kept); qid 639761 now needs its inner hops. See the next section.
+
 **Example that needs the chain.** Test qid 431362: Ambroise Paré satisfies its own hop, but its "to the west of"
 link goes to an invalid ?x2. Both are drawn in [`notebooks/osm.ipynb`](../../../notebooks/osm.ipynb) §12.
 
@@ -204,3 +215,59 @@ without following the chain.
 - **Filter:** keep only `needs_inner_hops` rows at depths 2–4. The builder would scan about twice as many
   candidates to fill the same quotas.
 - **Tag:** add a `needs_inner_hops` field and report test scores on all rows and on that subset.
+
+## Hop-distractor fix and where the remaining shortcuts come from (2026-11-06)
+
+**Two causes of the shortcut.** They are told apart on the **full map**, not the prompt
+(`check_kgqa.shortcut_cause`). The question is whether some POI passes the last hop's own conditions
+(attributes and named anchors) but fails the hop:
+- **Dataset: hop redundant.** No such POI exists. The last hop's own conditions already single out the answers,
+  so the "[sub-question]" part filters nothing, and no prompt can make the chain necessary.
+  - Example: test qid 532314. Team Brothers is the only cafe near Zara food within 100 m of Café Wam.
+  - It is already present in the source: a random sample of the unfiltered `df_multihop` has 11–14% of
+    multi-hop questions with a redundant hop. The build's filters raise it to about 20%, because ≤ 10 answers
+    favours tightly constrained final hops.
+- **Builder: hop distractor left out.** Such a POI exists and can be linked, but it was not in the prompt.
+  - In the first build this was 26% of the 2–4-hop test rows (389 / 1,500), against 21% (320) for the dataset
+    cause.
+  - Cause: a hop distractor was added only if it lay within 1.5 km of the path and could be linked to an
+    invalid previous-hop POI **with that hop's attributes**.
+  - Example: test qid 118082 left out Mama Shelter, a bar that fails only "within 100 m of ?x1".
+
+**Fix** ([`build_kgqa.py`](../../../scripts/osm/build_kgqa.py)).
+- Hop-distractor candidates come from the whole map: every POI that passes the hop's attributes and named
+  clauses but fails the hop relation.
+- Each is linked to an invalid POI in range of the hop relation. One with the previous hop's attributes is
+  preferred; otherwise any category is used. The shortcut accepts any link, so any link is enough to defeat
+  it.
+- Up to 2 per hop.
+
+**Residual: shared names.** Some hop distractors exist but have a name shared by several POIs
+(case-insensitive), or can link only to such POIs. The builder never puts a shared name in a prompt, so they
+cannot be added. Example: qid 118082, whose only hop distractor, Mama Shelter Paris La Défense, shares its name
+with another POI. Fixable only by disambiguating names (e.g. appending the arrondissement).
+
+**Result after the rebuild** (`check_kgqa.py`: PASS; split, quotas and filters unchanged; 23,000 / 23,000
+answerable from the prompt):
+
+| split | facts (mean) | prompt tokens mean / max | shortcut accuracy, depth 2 / 3 / 4 |
+| --- | --- | --- | --- |
+| train | 58.2 | 1,053 / 2,999 | 0.14 / 0.23 / 0.20 |
+| val | 57.1 | 1,028 / 2,801 | 0.09 / 0.24 / 0.23 |
+| test | 59.4 | 1,074 / 2,990 | 0.23 / 0.26 / 0.21 |
+
+Why the shortcut still works, test rows with 2–4 hops (1,500):
+
+| depth | needs inner hops | dataset: hop redundant | names shared | builder |
+| --- | --- | --- | --- | --- |
+| 2 | 383 | 110 | 7 | 0 |
+| 3 | 372 | 118 | 10 | 0 |
+| 4 | 397 | 94 | 9 | 0 |
+| all | 1,152 (76.8%) | 322 (21.5%) | 26 (1.7%) | 0 |
+
+In train, the dataset cause is 12.9% / 21.6% / 19.1% at depths 2 / 3 / 4, and shared names 0.7–1.4%.
+
+**Decision (user, 2026-11-06).**
+- Dataset-caused rows are kept; no filter, no tag.
+- Scores on 2–4-hop rows include about 20% of questions that can be answered from the last hop alone.
+- The notebook explains the causes with maps: [`notebooks/osm.ipynb`](../../../notebooks/osm.ipynb) §12–§14.

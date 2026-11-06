@@ -28,6 +28,11 @@ export GRAPH_RL_FUSE_SYNC=${GRAPH_RL_FUSE_SYNC:-1}  # 0 for the Bifrost vLLM plu
 
 PROJECT_NAME=${PROJECT_NAME:-Mimir-Graph-RLVR}  # RL runs have their own W&B project (SFT / eval stay in HRM-Graph)
 EXPERIMENT_NAME=${EXPERIMENT_NAME:-grpo_graph}
+# KL to the starting model (the actor with its LoRA disabled): REF_KL=True logs actor/kl_loss, KL_COEF weights it in the
+# loss (0 = log only, no penalty). Costs one more forward per step (~86 s for E3-sized batches). Default on, except for
+# e3_grpo_e2, which started without it: its resumes keep one config (decided 2026-11-06).
+REF_KL=${REF_KL:-$([ "$EXPERIMENT_NAME" = e3_grpo_e2 ] && echo False || echo True)}
+KL_COEF=${KL_COEF:-0.0}
 
 TRAIN_BATCH_SIZE=${TRAIN_BATCH_SIZE:-32}
 ROLLOUT_N=${ROLLOUT_N:-8}
@@ -59,7 +64,7 @@ RAY_CPUS=${RAY_CPUS:-16}
 export RAY_agent_register_timeout_ms=${RAY_agent_register_timeout_ms:-300000}
 export RAY_raylet_start_wait_time_s=${RAY_raylet_start_wait_time_s:-300}
 
-echo "[grpo_graph] model=$MODEL_PATH prefill=$GRAPH_RL_PREFILL reward=$GRAPH_REWARD train=$TRAIN_FILE"
+echo "[grpo_graph] model=$MODEL_PATH prefill=$GRAPH_RL_PREFILL reward=$GRAPH_REWARD ref_kl=$REF_KL kl_coef=$KL_COEF train=$TRAIN_FILE"
 echo "[grpo_graph] container memory at start: $(( $(cat /sys/fs/cgroup/memory.current) / 1000000000 )) GB of $(( $(cat /sys/fs/cgroup/memory.max) / 1000000000 )) GB"
 
 cd "$REPO"
@@ -92,7 +97,9 @@ cd "$REPO"
   actor_rollout_ref.actor.optim.lr=${LR} \
   actor_rollout_ref.actor.ppo_mini_batch_size=${PPO_MINI_BATCH} \
   actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=${PPO_MICRO_BATCH_PER_GPU} \
-  actor_rollout_ref.actor.use_kl_loss=False \
+  actor_rollout_ref.actor.use_kl_loss=${REF_KL} \
+  actor_rollout_ref.actor.kl_loss_coef=${KL_COEF} \
+  actor_rollout_ref.actor.kl_loss_type=low_var_kl \
   actor_rollout_ref.actor.entropy_coeff=0.0 \
   actor_rollout_ref.actor.clip_ratio_high=${CLIP_HIGH} \
   actor_rollout_ref.actor.loss_agg_mode=token-mean \
