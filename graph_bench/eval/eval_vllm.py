@@ -46,8 +46,14 @@ def build_prompt(rec, style: str, tokenizer, shots: list = (), chat_kwargs: dict
                                          add_generation_prompt=True, **(chat_kwargs or {}))
 
 
+def source_name(path: str) -> str:
+    """<dataset dir>/<file stem>, e.g. metaqa/test_retrieved: the eval split (ids do not tell gold from retrieved)."""
+    p = Path(path)
+    return f"{p.parent.name}/{p.stem}"
+
+
 def load(paths: list[str], limit: int | None, anon: bool, seed: int):
-    recs, dropped = [], 0
+    recs, sources, dropped = [], [], 0
     for path in paths:
         rs = read_records(path)
         if limit is not None and len(rs) > limit:
@@ -59,14 +65,18 @@ def load(paths: list[str], limit: int | None, anon: bool, seed: int):
                     dropped += 1
                     continue
             recs.append(r)
-    return recs, dropped
+            sources.append(source_name(path))
+    return recs, sources, dropped
 
 
 def summarize(rows: list[dict], ks: list[int]) -> dict:
+    """Keys: <dataset>, <dataset>/<task>, file/<dataset dir>/<file stem> (one per input file); macro_acc over datasets."""
     groups = defaultdict(list)
     for row in rows:
         groups[row["dataset"]].append(row)
         groups[f"{row['dataset']}/{row['task']}"].append(row)
+        if "source" in row:
+            groups[f"file/{row['source']}"].append(row)
     out = {}
     for name, rs in sorted(groups.items()):
         n = rs[0]["n"]
@@ -76,7 +86,7 @@ def summarize(rows: list[dict], ks: list[int]) -> dict:
             if k <= n:
                 s[f"pass@{k}"] = sum(pass_at_k(n, sum(r["acc"]), k) for r in rs) / len(rs)
         out[name] = s
-    datasets = [v for k, v in out.items() if "/" not in k]
+    datasets = [v for k, v in out.items() if "/" not in k]  # file/... keys have a "/" too
     out["macro_acc"] = sum(d["acc"] for d in datasets) / len(datasets) if datasets else 0.0
     return out
 
@@ -112,7 +122,7 @@ def main():
 
     from vllm import LLM, SamplingParams
 
-    recs, dropped = load(args.data, args.limit, args.anonymize, args.seed)
+    recs, sources, dropped = load(args.data, args.limit, args.anonymize, args.seed)
     print(f"{len(recs)} records ({dropped} dropped: question lost its entity after anonymisation)")
     llm = LLM(model=args.model, dtype=args.dtype, max_model_len=args.max_model_len, seed=args.seed,
               gpu_memory_utilization=args.gpu_memory_utilization, enforce_eager=args.enforce_eager,
@@ -162,10 +172,10 @@ def main():
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path.with_suffix(".samples.jsonl"), "w", encoding="utf-8") as f:
-        for rec, prompt, out in zip(recs, prompts, outputs):
+        for rec, source, prompt, out in zip(recs, sources, prompts, outputs):
             texts = [o.text for o in out.outputs] if out is not None else [""] * args.n
             scores = [score_record(t, rec) for t in texts]
-            row = {"id": rec.id, "dataset": rec.dataset, "task": rec.task, "n": len(texts),
+            row = {"id": rec.id, "dataset": rec.dataset, "task": rec.task, "source": source, "n": len(texts),
                    "acc": [s["acc"] for s in scores], "f1": [s["f1"] for s in scores]}
             rows.append(row)
             f.write(json.dumps({**row, "gold": rec.answers, "preds": [s["pred"] for s in scores],

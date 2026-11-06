@@ -43,7 +43,7 @@ def merge(base_dir: Path, lora_path: Path, scaling: float, out: Path) -> int:
     out.mkdir(parents=True, exist_ok=True)
     for f in base_dir.iterdir():
         dst = out / f.name
-        if f.name != "model.safetensors" and not dst.exists():
+        if f.name not in ("model.safetensors", "MERGED_FROM") and not dst.exists():  # a merged base has its own
             dst.symlink_to(f.resolve())
     save_file(weights, str(out / "model.safetensors"), metadata={"format": "pt"})
     (out / "MERGED_FROM").write_text(f"base {base_dir.resolve()}\nlora {lora_path.resolve()}\nscaling {scaling}\n")

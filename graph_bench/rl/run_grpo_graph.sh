@@ -2,7 +2,7 @@
 # GRPO on the graph sets with VeRL + vLLM (arms E3 / E3b / E4 of wiki: mimir-graph-benchmark).
 # Adapted from /work/dfm/marius-ortega/jacob-hrm-text-rlvr/verl_hrm_text/run_grpo_hrm_text.sh.
 #
-# Not yet run: the §7a gate (vLLM parity, prefill convention, LoRA merge sync) comes first. Smoke test:
+# Smoke test:
 #   TRAIN_FILE=... TEST_FILE=... TOTAL_TRAINING_STEPS=50 EXPERIMENT_NAME=smoke bash graph_bench/rl/run_grpo_graph.sh
 # Detach real runs: setsid nohup bash graph_bench/rl/run_grpo_graph.sh > <log> 2>&1 < /dev/null &
 #
@@ -15,8 +15,7 @@ JACOB=${JACOB:-/work/dfm/marius-ortega/jacob-hrm-text-rlvr}
 PY=${PY:-/home/ucloud/miniforge3/bin/python3}
 export PYTHONPATH="$REPO:$JACOB${PYTHONPATH:+:$PYTHONPATH}"
 export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
-# miniforge has wandb 0.30, which defaults to api.wandb.ai; ~/.netrc only holds the CoreWeave key (0.31 in .venv defaults to it)
-export WANDB_BASE_URL=${WANDB_BASE_URL:-https://api.forge.coreweave.com}
+# W&B: default host (api.wandb.ai); do not set WANDB_BASE_URL. WANDB_RUN_ID + WANDB_RESUME=must continue a run.
 
 MODEL_PATH=${MODEL_PATH:-danish-foundation-models/DFM-Mimir-v1.5}
 TRAIN_FILE=${TRAIN_FILE:-$REPO/data/graphs/bench/verl/train.parquet}
@@ -49,6 +48,9 @@ TEST_FREQ=${TEST_FREQ:-25}
 TOTAL_EPOCHS=${TOTAL_EPOCHS:-1}
 TOTAL_TRAINING_STEPS=${TOTAL_TRAINING_STEPS:-null}
 EXTRA_VERL_ARGS=${EXTRA_VERL_ARGS:-}
+# Dumps (one JSONL per step: prompt, response, score, gold, step): ROLLOUT_DATA_DIR gets the trained batch (the groups
+# kept by filter_groups), VAL_DATA_DIR every validation pass. Unset: nothing is stored.
+DUMP_ARGS="${ROLLOUT_DATA_DIR:+trainer.rollout_data_dir=$ROLLOUT_DATA_DIR} ${VAL_DATA_DIR:+trainer.validation_data_dir=$VAL_DATA_DIR}"
 # Host-RAM caps: the container has 128 GB (cgroup, no swap; an OOM restarts it and kills every job). Ray would
 # otherwise size its object store (on /dev/shm, counted in the cgroup) from system memory and see all 188 CPUs.
 RAY_OBJ_STORE=${RAY_OBJ_STORE:-8000000000}
@@ -123,4 +125,5 @@ cd "$REPO"
   ray_kwargs.ray_init.num_cpus=${RAY_CPUS} \
   +ray_kwargs.ray_init.object_store_memory=${RAY_OBJ_STORE} \
   +ray_kwargs.ray_init.include_dashboard=False \
+  ${DUMP_ARGS} \
   ${EXTRA_VERL_ARGS}

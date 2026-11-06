@@ -167,7 +167,7 @@ bash scripts/graphs/run_graphqa_scaled.sh
 - Plain `python pretrain.py` runs fp32 on CUDA (no FSDP mixed precision without a process group) and fails in
   the FA2 kernel. Use `torchrun --nproc_per_node=1`.
 - Log every run to W&B: `all_config.yaml` and `train_metadata.yaml`, which eval needs, are only written with a
-  W&B run. Logged in as `m-ortega` (entity `m-ortega-p-le-l-onard-de-vinci`, host `forge.coreweave.com`).
+  W&B run. Logged in as `m-ortega` (entity `m-ortega-p-le-l-onard-de-vinci`, default host `api.wandb.ai`; the old `forge.coreweave.com` links are the same backend, so set no `WANDB_BASE_URL`).
   Use `WANDB_MODE=offline` only without network, and never `disabled`.
 - Queue roots default to `/work/dfm/marius-ortega/dfm-hrm-graphs/<experiment>`. Old FlexAttention results stay
   in `/work/dfm/marius-ortega/<experiment>`. Pointing a queue there would skip runs as "already trained".

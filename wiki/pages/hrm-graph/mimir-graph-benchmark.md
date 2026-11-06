@@ -4,7 +4,7 @@ title: Mimir v1.5 Graph-Reasoning Benchmark (Zero-Shot, SFT, RLVR)
 description: "Plan (approved 2026-11-02) and implementation log for testing whether DFM-Mimir-v1.5 is the strongest graph / KG reasoner, zero-shot and after SFT and RLVR: claim challenges, hypotheses, models and baselines, datasets, splits, arms and what each is compared with, the VeRL + vLLM RL stack, and the 2026-11-03 fixes, vLLM parity gate and GRPO smoke result."
 tags: [graphs, mimir, rlvr, grpo, vllm, verl, kgqa, benchmark]
 status: draft
-last_updated: 2026-11-03
+last_updated: 2026-11-05
 confidence: medium
 ---
 # Mimir v1.5 Graph-Reasoning Benchmark
@@ -21,6 +21,7 @@ implementation log that follows it.
   (since 2026-11-03; only the first smoke run, `iyp11un6`, is in `HRM-Graph`).
 - Run outputs: `/work/dfm/marius-ortega/dfm-hrm-graphs/mimir_bench/` (`e0/`, `e1/`, `e2/`, `sft_*`, `e3_*`, `e4_*`,
   queue logs); merged models in `/work/dfm/marius-ortega/dfm-hrm-graphs/hf/`.
+- Results and run log (E0, E1/E2 with baselines, pass@16, fixes): [Results](/pages/hrm-graph/mimir-graph-benchmark-results.md).
 - Prior results it builds on: [Graph Reasoning Experiments](/pages/hrm-graph/graph-reasoning-experiments.md),
   [Graph-Structure Injection](/pages/hrm-graph/graph-structure-injection.md),
   [GraphQA Chain of Thought](/pages/hrm-graph/graphqa-cot.md).
@@ -29,6 +30,9 @@ implementation log that follows it.
 - KGQA source loaders (URLs and schemas only): `data/graphs/KGQA/*/`.
 
 ## Status (updated 2026-11-03)
+
+Superseded (2026-11-05): E0 done (7 models), E1/E2 done for Mimir v1.5, Qwen2.5-7B and OLMo-3-7B, Qwen3.5-4B
+training, GRPO queued after it. Results and run log: [Results](/pages/hrm-graph/mimir-graph-benchmark-results.md).
 
 | Item | State |
 | --- | --- |
@@ -196,6 +200,8 @@ The recipe follows DeepSeek-R1, with the DAPO and Dr. GRPO fixes:
 1. cold-start SFT on verified traces, plus general replay;
 2. GRPO on the same task pool, with:
    - EM / set-F1 / checker rewards, plus a small format reward;
+     Superseded (2026-11-05): the implemented reward has no format term, see
+     [GRPO reward as implemented](#grpo-reward-as-implemented-2026-11-05);
    - prompts filtered to SFT pass rates strictly between 0 and 1;
    - clip-higher, dynamic sampling and token-level loss;
    - no KL term;
@@ -475,7 +481,9 @@ shows rising reward and a stable logprob gap.
 | `graph_bench/run_sft.sh` | merge check, then E1 and E2: graph_inject LoRA r16, 3 epochs, 8,192 tokens/step, last epoch merged into an HF dir (`graph_bench/merge_lora_hf.py`), eval like E0, E2 pass@16 on val and held-out subsets | about 1.5 h of training per arm (from earlier Mimir LoRA runs: 1.2 steps/s) |
 | `graph_bench/rl/run_rl_arms.sh` | after E2's merge: E3 (GRPO from E2, 200 steps), E4 (GRPO on CLUTRR from E2, 100 steps; then LoRA SFT on CLUTRR answers from E2), E3b (GRPO from base, 200 steps) | about 21 h per 200 GRPO steps (6.2 min/step in the smoke run) |
 
-- **GRPO settings:** 16 prompts × 8 rollouts, LoRA r32, val every 25 steps, checkpoints every 50. DAPO
+- **GRPO settings:** 16 prompts × 8 rollouts, LoRA r32, val every 25 steps, checkpoints every 50.
+  Superseded (2026-11-04): responses 2,048 tokens (from 1,024), micro-batches 2, checkpoints every 25, see
+  [Results: generation cap](/pages/hrm-graph/mimir-graph-benchmark-results.md#the-generation-cap-understated-e2-2026-11-04). DAPO
   `filter_groups` drops all-0 / all-1 groups online, which applies the plan's "pass rate strictly between 0 and 1"
   rule without a separate pass@k filtering pass.
 - **Merge check:** a GraphQA LoRA with a known native test score (0.842) is merged and run through vLLM on the
@@ -483,3 +491,21 @@ shows rising reward and a stable logprob gap.
 - **Still to do:** convert the VeRL checkpoints (LoRA) to HF dirs and evaluate them like E0; the retention suite;
   the remaining baselines.
 
+
+## GRPO reward as implemented (2026-11-05)
+
+`graph_bench/rl/reward.py` (used by E3, E3b and E4) scores the final answer only:
+- no `Answer:` line (after stripping special tokens) → 0;
+- otherwise the eval metric of `graph_bench/scoring.py`: `acc` (1/0) by default; with `GRAPH_REWARD=f1`, set-answer
+  records get their set-F1 as partial credit. `run_grpo_graph.sh` defaults to `acc`.
+- **No format reward**, despite the design above: the `Answer:`-line rule is a gate, not a bonus.
+- **GRPO never sees a gold trace.** The VeRL ground truth (`graph_bench/export_verl.py`) carries only `answers`,
+  `answer_format` and `checker`. Traces reach RL only through the starting point: E3 and E4 start from E2, which
+  imitated the gold traces, and RL then reinforces whatever reasoning reaches the right answer. E3b starts from the
+  base model, so E3 − E3b measures what that trace initialisation buys.
+
+**To do: a format reward.** Not implemented. Candidate: a small bonus (≪ 1, e.g. 0.1) for a well-formed completion
+(thought channel closed, exactly one `Answer:` line, answer parses in the record's `answer_format`). The likely use
+is E3b: if the base model rarely writes an `Answer:` line, most groups are all-0, DAPO `filter_groups` drops them and
+little is learned. Keep `filter_groups.metric=acc`, so the bonus shapes the gradient without letting formatted wrong
+answers count as solved. Check E3b's `has_answer` rate in its first steps before deciding.

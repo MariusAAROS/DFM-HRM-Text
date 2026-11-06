@@ -15,7 +15,7 @@ PY=/home/ucloud/miniforge3/bin/python
 HF=/work/dfm/marius-ortega/dfm-hrm-graphs/hf
 BASE=$HF/DFM-Mimir-v1.5-hfview
 B=data/graphs/bench
-export HF_HUB_OFFLINE=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 WANDB_BASE_URL=https://api.forge.coreweave.com
+export HF_HUB_OFFLINE=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
 export PATH="$PWD/.venv/bin:$PATH"
 
 NAMED="$B/graphqa/test.jsonl $B/metaqa/test.jsonl $B/kqapro/test.jsonl $B/webqsp/test.jsonl $B/clrs/test.jsonl

@@ -3,7 +3,10 @@
 # job dies alone instead of tripping the container's out-of-memory kill (cgroup limit 128 GB, no swap: an OOM restarts
 # the container and every job in it, as on 2026-11-02).
 #   bash scripts/graphs/mem_guard.sh <cap_GB> -- <cmd...>
-#   CONTAINER_CAP_GB=110 (default): also kill the group if the whole container passes this.
+#   CONTAINER_CAP_GB=110 (default): also kill the group if the container's unreclaimable memory passes this:
+#   memory.current - file + shmem (anon, kernel, /dev/shm). Page cache is not counted: the kernel reclaims it before an
+#   OOM kill, and after hours of model loading it fills most of memory.current (104 of 110 GB on 2026-11-04, when
+#   counting it killed a 6 GB eval).
 #   MEM_GUARD_KILL=0: log only (sidecar watch for GPU jobs).
 # Prints the group's peak RSS on exit; exits with the command's status (137 if the guard killed it).
 set -uo pipefail
@@ -12,6 +15,11 @@ cap_gb=$1; shift
 container_cap_gb=${CONTAINER_CAP_GB:-110}
 kill_on=${MEM_GUARD_KILL:-1}
 cgroup=/sys/fs/cgroup/memory.current
+stat=/sys/fs/cgroup/memory.stat
+unreclaimable() {  # bytes: memory.current - file + shmem
+  local cur; cur=$(cat "$cgroup" 2>/dev/null || echo 0)
+  awk -v cur="$cur" '$1 == "file" {f = $2} $1 == "shmem" {s = $2} END {print cur - f + s}' "$stat" 2>/dev/null || echo "$cur"
+}
 
 setsid "$@" &
 pid=$!
@@ -20,7 +28,7 @@ killed=0
 while kill -0 "$pid" 2>/dev/null; do
   rss_kb=$(ps -o rss= --sid "$pid" 2>/dev/null | awk '{s+=$1} END {print s+0}')
   [ "$rss_kb" -gt "$peak_kb" ] && peak_kb=$rss_kb
-  cg_gb=$(( $(cat "$cgroup" 2>/dev/null || echo 0) / 1000000000 ))
+  cg_gb=$(( $(unreclaimable) / 1000000000 ))
   if [ "$rss_kb" -gt $(( cap_gb * 1000000 )) ] || [ "$cg_gb" -ge "$container_cap_gb" ]; then
     echo "[mem_guard] $(date +%T) group RSS $((rss_kb / 1000000)) GB (cap $cap_gb), container $cg_gb GB (cap $container_cap_gb)" >&2
     if [ "$kill_on" = 1 ] && [ "$killed" = 0 ]; then

@@ -1,57 +1,132 @@
 """Log finished eval_vllm reports to W&B (wiki: mimir-graph-benchmark). eval_vllm.py itself only writes JSON.
 
 One W&B run per report: project Mimir-Graph-RLVR (the whole benchmark: E0-E4), job_type eval, group --group, by
-default mimir-bench-<arm> for a report at <root>/<arm>/<model>/<cond>.json; name <arm>/<model>/<cond>. Summary: acc / f1 / pass@k per dataset and dataset/task, macro_acc; config: the
-report's settings; a table of the first --table-rows samples (prompt tail, generation, pred, gold, acc).
-A report already logged is marked by a <report>.wandb file holding the run path, and skipped.
+default mimir-bench-<arm> for a report at <root>/<arm>/<model>/<cond>.json; name <arm>/<model>/<cond>.
+
+Metrics, per eval file ("split": <dataset dir>/<file stem>, e.g. metaqa/test_retrieved), per dataset, and per
+dataset/task: acc, f1, pass@k (n > 1), answer_rate (share of first samples with an "Answer:" line), count; plus
+macro_acc over datasets. They go to the run summary (runs table), to the history at step 0 as split/<split>/<metric>
+and dataset/<name>/<metric> (so the workspace gets panels; use bar charts to compare runs), and to a "metrics" table.
+Config: the report's settings. A "samples" table holds the first --table-rows samples.
+
+Reports written before eval_vllm recorded each row's source file: the split is rebuilt from the row order (rows follow
+the input files in order, min(limit, rows) each; an anonymised report's files are one per dataset).
+
+A report already logged is marked by <report>.wandb (run path, then the logger version); a v1 run (summary only) is
+resumed and completed in place, not duplicated.
 
     .venv/bin/python -m graph_bench.eval.log_wandb $ROOT/e0/*/*.json
     .venv/bin/python -m graph_bench.eval.log_wandb --watch $ROOT/e0 $ROOT/e1 $ROOT/e2   # until killed
 """
 import argparse
 import json
-import os
 import time
+from collections import defaultdict
+from math import comb
 from pathlib import Path
 
-os.environ.setdefault("WANDB_BASE_URL", "https://api.forge.coreweave.com")
-import wandb  # noqa: E402
+import wandb
 
 PROJECT = "Mimir-Graph-RLVR"
+VERSION = "v2"
+
+
+def source_name(path: str) -> str:  # = eval_vllm.source_name (not imported: it pulls in the scorer and anonymiser)
+    p = Path(path)
+    return f"{p.parent.name}/{p.stem}"
+
+
+def rebuild_sources(report: dict, samples: list[dict]) -> list[str]:
+    """Source file of each sample for reports without a "source" field."""
+    files = report["data"]
+    if len(files) == 1:
+        return [source_name(files[0])] * len(samples)
+    by_ds = defaultdict(list)
+    for f in files:
+        by_ds[Path(f).parent.name].append(f)
+    if all(len(v) == 1 for v in by_ds.values()) and all(s["dataset"] in by_ds for s in samples):  # one file each
+        return [source_name(by_ds[s["dataset"]][0]) for s in samples]
+    if report.get("anonymized"):
+        raise ValueError("anonymised report with two files of one dataset: dropped rows make the order ambiguous")
+    sizes = [sum(1 for _ in open(f, encoding="utf-8")) for f in files]
+    limits = [n for n in range(1, max(sizes) + 1) if sum(min(n, s) for s in sizes) == len(samples)]
+    if not limits:
+        raise ValueError(f"{len(samples)} samples do not match files of {sizes} rows")
+    out = []
+    for f, s in zip(files, sizes):
+        out += [source_name(f)] * min(limits[0], s)
+    for s, src in zip(samples, out):  # row order check: each sample's dataset matches its file's
+        if s["dataset"] != Path(src).parent.name and Path(src).parent.name in by_ds:
+            raise ValueError(f"sample {s['id']} ({s['dataset']}) does not fall in {src}")
+    return out
+
+
+def pass_at_k(n: int, c: int, k: int) -> float:
+    return 1.0 if n - c < k else 1.0 - comb(n - c, k) / comb(n, k)
+
+
+def metrics(samples: list[dict], sources: list[str]) -> dict[str, dict]:
+    groups = defaultdict(list)
+    for s, src in zip(samples, sources):
+        groups[f"split/{src}"].append(s)
+        groups[f"dataset/{s['dataset']}"].append(s)
+        groups[f"task/{s['dataset']}/{s['task']}"].append(s)
+    out = {}
+    for name, rs in sorted(groups.items()):
+        n = rs[0]["n"]
+        m = {"count": len(rs), "acc": sum(r["acc"][0] for r in rs) / len(rs),
+             "f1": sum(r["f1"][0] for r in rs) / len(rs),
+             "answer_rate": sum("Answer:" in r["generations"][0] for r in rs) / len(rs)}
+        if n > 1:
+            for k in (1, 4, 8, 16, 32):
+                if k <= n:
+                    m[f"pass@{k}"] = sum(pass_at_k(n, sum(r["acc"]), k) for r in rs) / len(rs)
+        out[name] = m
+    datasets = [v["acc"] for k, v in out.items() if k.startswith("dataset/")]
+    out["macro_acc"] = {"value": sum(datasets) / len(datasets) if datasets else 0.0}
+    return out
 
 
 def log_report(path: Path, group: str | None, table_rows: int) -> str | None:
     marker = path.with_suffix(".wandb")
-    if marker.exists():
+    old = marker.read_text().split() if marker.exists() else []
+    if old[1:2] == [VERSION]:
         return None
     report = json.loads(path.read_text())
+    samples_path = path.with_suffix(".samples.jsonl")
+    samples = [json.loads(line) for line in open(samples_path, encoding="utf-8")]
+    sources = [s["source"] for s in samples] if samples and "source" in samples[0] else rebuild_sources(report, samples)
+    m = metrics(samples, sources)
     model_name, arm = path.parent.name, path.parent.parent.name
     group = group or f"mimir-bench-{arm}"
-    summary = {}
-    for name, s in report["summary"].items():
-        if isinstance(s, dict):
-            summary.update({f"{name}/{k}": v for k, v in s.items()})
-        else:
-            summary[name] = s
     config = {k: v for k, v in report.items() if k != "summary"} | {"report": str(path), "model_name": model_name,
                                                                     "condition": path.stem, "arm": arm}
-    run = wandb.init(project=PROJECT, group=group, job_type="eval", name=f"{arm}/{model_name}/{path.stem}",
-                     tags=[group, arm, model_name, path.stem], config=config, reinit="finish_previous")
-    run.summary.update(summary)
-    samples = path.with_suffix(".samples.jsonl")
-    if samples.exists() and table_rows:
-        table = wandb.Table(columns=["id", "dataset", "task", "acc", "gold", "pred", "generation", "prompt_tail"])
-        with open(samples, encoding="utf-8") as f:
-            for i, line in enumerate(f):
-                if i >= table_rows:
-                    break
-                r = json.loads(line)
-                table.add_data(r["id"], r["dataset"], r["task"], r["acc"][0], json.dumps(r["gold"], ensure_ascii=False),
-                               str(r["preds"][0]), r["generations"][0], r["prompt_tail"])
-        run.log({"samples": table})
+    init = dict(project=PROJECT, group=group, job_type="eval", name=f"{arm}/{model_name}/{path.stem}",
+                tags=[group, arm, model_name, path.stem], config=config)
+    if old:  # v1 run: resume it
+        init |= {"id": old[0].split("/")[-1], "resume": "must"}
+    run = wandb.init(**init, reinit="finish_previous")
+    flat = {"macro_acc": m.pop("macro_acc")["value"]}
+    for name, v in m.items():
+        flat.update({f"{name}/{k}": x for k, x in v.items()})
+    table = wandb.Table(columns=["level", "name", "count", "acc", "f1", "answer_rate"]
+                        + sorted({k for v in m.values() for k in v if k.startswith("pass@")}))
+    for name, v in m.items():
+        level, _, key = name.partition("/")
+        table.add_data(level, key, v["count"], v["acc"], v["f1"], v["answer_rate"],
+                       *[v.get(c) for c in table.columns[6:]])
+    payload = {k: x for k, x in flat.items() if not k.startswith("task/")} | {"metrics": table}
+    if not old and table_rows:
+        st = wandb.Table(columns=["id", "split", "dataset", "task", "acc", "gold", "pred", "generation", "prompt_tail"])
+        for s, src in list(zip(samples, sources))[:table_rows]:
+            st.add_data(s["id"], src, s["dataset"], s["task"], s["acc"][0], json.dumps(s["gold"], ensure_ascii=False),
+                        str(s["preds"][0]), s["generations"][0], s["prompt_tail"])
+        payload["samples"] = st
+    run.log(payload)
+    run.summary.update(flat)
     run_path = run.path
     run.finish()
-    marker.write_text(run_path + "\n")
+    marker.write_text(f"{run_path}\n{VERSION}\n")
     return run_path
 
 
@@ -72,7 +147,11 @@ def main():
     args = ap.parse_args()
     while True:
         for path in reports(args.paths):
-            run_path = log_report(path, args.group, args.table_rows)
+            try:
+                run_path = log_report(path, args.group, args.table_rows)
+            except Exception as e:  # one bad report must not stop the watcher
+                print(f"{path}: {type(e).__name__}: {e}", flush=True)
+                continue
             if run_path:
                 print(f"{path} -> {run_path}", flush=True)
         if not args.watch:
