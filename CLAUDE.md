@@ -28,6 +28,9 @@ Results from the old stack are not used for comparisons any more.
   `scripts/graph_inject/run_matrix.sh`, W&B project **`Graph-Positional-Encoding-Exploration`** (not HRM-Graph),
   see [`wiki/pages/hrm-graph/graph-structure-injection.md`](wiki/pages/hrm-graph/graph-structure-injection.md). Smoke runs: W&B offline
   and an `out_root` under `graph_inject_bench`, so the queue does not skip real runs.
+- OSM spatial multi-hop QA (Paris POIs, `data/osm/`) as KGQA: analysis `notebooks/osm.ipynb`, helpers `scripts/osm/osm_kg.py`,
+  train/val/test build `scripts/osm/build_kgqa.py` -> `data/osm/kgqa` (checked by `scripts/osm/check_kgqa.py`), see
+  [`wiki/pages/hrm-graph/osm-spatial-kgqa.md`](wiki/pages/hrm-graph/osm-spatial-kgqa.md).
 - KG / graph pretraining corpus for Mimir (Wikidata, YAGO, KELM, T-REx, ... as data_io rows + triple stores with a
   fixed holdout): `scripts/kg_pretrain/run_all.sh`, data in `data/kg_pretrain/`, see
   [`wiki/pages/hrm-graph/kg-pretraining-corpus.md`](wiki/pages/hrm-graph/kg-pretraining-corpus.md).

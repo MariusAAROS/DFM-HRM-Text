@@ -1,4 +1,4 @@
-"""Helpers for notebooks/osm.ipynb: load the OSM multi-hop dataset, decode geometries, parse questions,
+"""Helpers for notebooks/osm.ipynb and scripts/osm/build_kgqa.py: load the OSM multi-hop dataset, decode geometries, parse questions,
 and evaluate the spatial relations so that questions can be answered from the entity tables (KGQA check).
 
 Tables (data/osm/):
@@ -25,7 +25,7 @@ import pandas as pd
 from matplotlib.path import Path as MplPath
 from scipy.spatial import cKDTree
 
-DATA_DIR = Path(__file__).resolve().parents[1] / "data" / "osm"
+DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "osm"
 
 # --------------------------------------------------------------------------------------------- WKB
 
