@@ -4,7 +4,7 @@ title: Mimir v1.5 Graph Benchmark - Results and Run Log
 description: "Results and run log of the Mimir v1.5 graph benchmark from 2026-11-03: E0 zero-shot matrix (7 models), E1/E2 LoRA SFT for Mimir v1.5, Qwen2.5-7B and OLMo-3-7B, the generation-cap artefact on trace-trained models, pass@16 headroom for GRPO, and the failures and protocol changes made on the way (memory guard, eval split keys, GRPO response length)."
 tags: [graphs, mimir, benchmark, sft, lora, grpo, kgqa, clrs, clutrr, qwen, olmo]
 status: draft
-last_updated: 2026-11-05
+last_updated: 2026-11-09
 confidence: medium
 ---
 # Mimir v1.5 Graph Benchmark - Results and Run Log
@@ -161,3 +161,66 @@ T = 1, 16 samples, 200 rows per file.
 - Qwen3.5-4B E1/E2: at ~1,020 tokens/s about 12 h per E1 and 16 h per E2.
 - GRPO E3 → E4 (+ SFT control) → E3b after the baselines. Estimate at the longer responses: ~9-12 min/step.
 - Not covered: eval of the GRPO checkpoints, retention suite (H4), Gemma-4, Ouro, IFM, Tier 2 sets.
+
+## GLM-5.3 as a zero-shot frontier reference: setup (2026-11-09)
+
+**Why.** GLM-5.3 gives a frontier-model ceiling for every test set of the E0–E4 tables. It's far larger than the
+≤ 7B models, so it's a reference row, not an H1 competitor. It's only reachable through an API, so it's evaluated
+zero-shot only.
+
+- **Code:**
+  - [`graph_bench/eval/eval_api.py`](../../../graph_bench/eval/eval_api.py) is `eval_vllm.py`'s counterpart for
+    OpenAI-compatible APIs. It uses the same `load` subsets (seed 0, ≤ 1,000 rows per file), the same instruct
+    prompt and the same `score_record`, and writes the same report / `.samples.jsonl` format. So `log_wandb.py`
+    and `osm_breakdown.py` read it unchanged.
+  - Queue: [`graph_bench/eval/run_glm.sh`](../../../graph_bench/eval/run_glm.sh). CPU only, no GPU lock.
+- **Endpoint:** `GLM_SERVER` / `GLM_API_KEY` in the repo's `.env` (SDU, `ai.cloud.sdu.dk/v1`, model
+  `zai-org/GLM-5.3`). The key is never written to reports or logs.
+- **Robustness:** runs are resumable (`<out>.partial.jsonl`; failed rows are retried on restart). Rows that still
+  fail after the retries score 0 and are counted as `api_errors`.
+- **Outputs:**
+  - `mimir_bench/e0/glm53/{named,anon,osm}_{t3k,t16k}.json`;
+  - W&B `Mimir-Graph-RLVR`, group `mimir-bench-e0`, runs `e0/glm53/<cond>`.
+
+**What the SDU server accepts** (checked 2026-11-09 on single rows):
+
+| Request parameter | Effect |
+| --- | --- |
+| `chat_template_kwargs.enable_thinking=false`, `thinking.type=disabled`, `/nothink` in the prompt | Ignored: hidden `reasoning` is always returned |
+| `max_tokens` | Ignored (a cap of 64 returned 411 tokens) |
+| `max_completion_tokens` | Enforced; it covers hidden reasoning and the visible answer together |
+| `reasoning_effort` | Only `low` is accepted (`none`, `minimal` and `medium` are rejected). On one CLUTRR row it cut 21,842 tokens to 3,322 |
+
+So GLM can't run "thinking off" like the other chat models. Unlimited, the hidden reasoning reached 22k tokens on
+one CLUTRR row; the visible answers stayed short.
+
+**Settings (user, 2026-11-09).** Two runs on the same rows:
+
+| Condition | Token cap (reasoning + answer) | Effort | Meaning |
+| --- | --- | --- | --- |
+| `_t3k` | 3,072 | low | The other models' budget; GLM splits it between hidden reasoning and the answer |
+| `_t16k` | 16,384 | server default | GLM's ceiling |
+
+- **Sets:** the 12 named E0 test files (9,554 rows), the 4 anonymised KGQA files and OSM test (2,000 rows; see
+  [OSM KGQA](/pages/hrm-graph/osm-spatial-kgqa.md)). No pass@k.
+- **Scoring:** on the visible `content` only. The reasoning is kept in the samples file. A row cut off before its
+  `Answer:` line scores 0, as cut-off answers do for every other model.
+
+**Smoke run (15 rows: 5 each from GraphQA, CLUTRR, OSM; `_t3k`):**
+- 9 of 15 right, and these are exactly the 9 rows that finished.
+- The other 6 hit the cap inside the hidden reasoning (11–13k characters each) with no answer: 4 of 5 CLUTRR,
+  1 GraphQA, 1 four-hop OSM row.
+- Without the cap (first attempt), 4 of these 6 reached an answer, 3 of them right; the other 2 hadn't finished
+  when it was stopped.
+- On the full run, 8 of the first 107 named rows were cut off. Throughput was about 2.5 rows/s with 16
+  concurrent requests.
+
+**Reading the results:**
+- `_t3k` compares with the `_t3k` reports (E2, E3, OSM), not with E0's `named.json`, which the other models ran at
+  1,024 tokens.
+- The gap between `_t3k` and `_t16k` shows how much of GLM's score the shared budget costs. Report the cut-off
+  rate (`finish_length`) next to every GLM score.
+- GLM has probably seen WebQSP, CWQ, MetaQA and KQA Pro. The gap between its anonymised and named scores measures
+  that reliance. GraphQA-fresh and OSM are the cleanest probes.
+
+**Status:** running (`mimir_bench/e0/glm53/queue.log`); results to be added here.

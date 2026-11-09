@@ -22,6 +22,7 @@ implementation log that follows it.
 - Run outputs: `/work/dfm/marius-ortega/dfm-hrm-graphs/mimir_bench/` (`e0/`, `e1/`, `e2/`, `sft_*`, `e3_*`, `e4_*`,
   queue logs); merged models in `/work/dfm/marius-ortega/dfm-hrm-graphs/hf/`.
 - Results and run log (E0, E1/E2 with baselines, pass@16, fixes): [Results](/pages/hrm-graph/mimir-graph-benchmark-results.md).
+- Frontier reference (added 2026-11-09): GLM-5.3 zero-shot through the SDU API on every E0–E4 test set and OSM, at the shared 3,072-token budget and at 16k: [Results: GLM-5.3](/pages/hrm-graph/mimir-graph-benchmark-results.md#glm-53-as-a-zero-shot-frontier-reference-setup-2026-11-09).
 - Downstream zero-shot probe (added 2026-11-09): OSM Paris spatial KGQA, never trained, evaluated for E3, E2, the
   base model and the 7B baselines: [OSM KGQA](/pages/hrm-graph/osm-spatial-kgqa.md#zero-shot-transfer-eval-of-the-mimir-benchmark-models-2026-11-09).
 - Prior results it builds on: [Graph Reasoning Experiments](/pages/hrm-graph/graph-reasoning-experiments.md),
