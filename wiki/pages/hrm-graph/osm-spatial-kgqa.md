@@ -4,7 +4,7 @@ title: OSM Spatial Multi-Hop QA as KGQA
 description: The OSM Paris multi-hop spatial question set (data/osm), evidence that it can be cast as KGQA (entity linking, relation rules recovered from the gold answers, re-answering from the tables), and the train/val/test KGQA build in data/osm/kgqa.
 tags: [graphs, kgqa, osm, spatial, dataset]
 status: stable
-last_updated: 2026-11-06
+last_updated: 2026-11-09
 confidence: high
 ---
 # OSM Spatial Multi-Hop QA as KGQA
@@ -33,6 +33,8 @@ records the evidence and the train/val/test build.
   - [`scripts/osm/check_kgqa.py`](../../../scripts/osm/check_kgqa.py): checks.
 - **Output:** `data/osm/kgqa/{train,val,test}.jsonl` (see its `README.md`). No model has been trained or
   evaluated on it yet.
+  Superseded (2026-11-09): a zero-shot eval of the Mimir benchmark models is queued, see
+  [Zero-shot transfer eval](#zero-shot-transfer-eval-of-the-mimir-benchmark-models-2026-11-09).
 
 ## Dataset structure (2026-11-06)
 
@@ -271,3 +273,37 @@ In train, the dataset cause is 12.9% / 21.6% / 19.1% at depths 2 / 3 / 4, and sh
 - Dataset-caused rows are kept; no filter, no tag.
 - Scores on 2–4-hop rows include about 20% of questions that can be answered from the last hop alone.
 - The notebook explains the causes with maps: [`notebooks/osm.ipynb`](../../../notebooks/osm.ipynb) §12–§14.
+
+## Zero-shot transfer eval of the Mimir benchmark models (2026-11-09)
+
+**Question.** Can the GRPO-tuned Mimir v1.5 (arm E3 of the
+[Mimir graph benchmark](/pages/hrm-graph/mimir-graph-benchmark.md)) answer OSM questions zero-shot? OSM is a
+downstream task outside the benchmark: no arm trains on it, and its relations (distances, directions, streets,
+areas) appear in no training set.
+
+- **Conversion:** [`graph_bench/sources/osm.py`](../../../graph_bench/sources/osm.py) writes
+  `data/graphs/bench/osm/{val,test}.jsonl` as bench records.
+  - The graph block is kept verbatim as `context`, not split into triples, because POI names contain commas. So
+    the benchmark's anonymised-entity variant does not apply to OSM.
+  - The rendered prompt equals the source `instruction` on every row (asserted). `answer_format` is `set`.
+  - `meta.needs_inner_hops` is the outer-hop shortcut test of `check_kgqa.py`, used only to split scores. The
+    source files stay untagged, as decided above.
+- **Queue:** [`graph_bench/eval/run_osm.sh`](../../../graph_bench/eval/run_osm.sh) waits for E3's merged model,
+  then evaluates, on all 2,000 test rows:
+  - Mimir v1.5: E3, E2 (trace SFT) and the base model;
+  - Qwen2.5-7B-Instruct and OLMo-3-7B-Instruct, zero-shot and after their own trace SFT (E2).
+- **Settings:** those of E3's own eval (`named_t3k`): instruct prompt, thinking off, greedy, up to 3,072
+  generated tokens, eager vLLM, Mimir context 4,096.
+  - Longest OSM prompt in Mimir tokens: 3,002 (mean 1,091). Every row keeps at least ~1,090 generation tokens.
+- **Outputs:**
+  - Reports: `mimir_bench/<arm>/<model>/osm_t3k.json`, logged to W&B `Mimir-Graph-RLVR`, group
+    `mimir-bench-<arm>`.
+  - Breakdown: [`graph_bench/eval/osm_breakdown.py`](../../../graph_bench/eval/osm_breakdown.py) writes
+    `mimir_bench/osm_breakdown.json` with set accuracy and set-F1 per depth.
+  - 2–4-hop rows are also split into those that need the chain (1,152) and those the shortcut answers (348).
+- **Comparisons:**
+  - E3 − E2: what RL adds to transfer.
+  - E2 − base: what the trace SFT adds.
+  - The 7B models show whether Mimir's score is high or low for this task.
+- **Status:** queued (`mimir_bench/osm_queue.log`); no results yet. If E3 fails instead of finishing, the queue
+  waits indefinitely; then point it at the last E3 checkpoint.

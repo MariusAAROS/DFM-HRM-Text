@@ -4,7 +4,7 @@ title: Mimir v1.5 Graph-Reasoning Benchmark (Zero-Shot, SFT, RLVR)
 description: "Plan (approved 2026-11-02) and implementation log for testing whether DFM-Mimir-v1.5 is the strongest graph / KG reasoner, zero-shot and after SFT and RLVR: claim challenges, hypotheses, models and baselines, datasets, splits, arms and what each is compared with, the VeRL + vLLM RL stack, and the 2026-11-03 fixes, vLLM parity gate and GRPO smoke result."
 tags: [graphs, mimir, rlvr, grpo, vllm, verl, kgqa, benchmark]
 status: draft
-last_updated: 2026-11-05
+last_updated: 2026-11-09
 confidence: medium
 ---
 # Mimir v1.5 Graph-Reasoning Benchmark
@@ -22,6 +22,8 @@ implementation log that follows it.
 - Run outputs: `/work/dfm/marius-ortega/dfm-hrm-graphs/mimir_bench/` (`e0/`, `e1/`, `e2/`, `sft_*`, `e3_*`, `e4_*`,
   queue logs); merged models in `/work/dfm/marius-ortega/dfm-hrm-graphs/hf/`.
 - Results and run log (E0, E1/E2 with baselines, pass@16, fixes): [Results](/pages/hrm-graph/mimir-graph-benchmark-results.md).
+- Downstream zero-shot probe (added 2026-11-09): OSM Paris spatial KGQA, never trained, evaluated for E3, E2, the
+  base model and the 7B baselines: [OSM KGQA](/pages/hrm-graph/osm-spatial-kgqa.md#zero-shot-transfer-eval-of-the-mimir-benchmark-models-2026-11-09).
 - Prior results it builds on: [Graph Reasoning Experiments](/pages/hrm-graph/graph-reasoning-experiments.md),
   [Graph-Structure Injection](/pages/hrm-graph/graph-structure-injection.md),
   [GraphQA Chain of Thought](/pages/hrm-graph/graphqa-cot.md).
