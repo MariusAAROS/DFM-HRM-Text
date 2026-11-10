@@ -197,7 +197,9 @@ def merge(base: Path, adapter: Path, out: Path) -> int:
                 keys[k] = s
     target = {}
     for suffix in pairs:
-        hits = [k for k in keys if k.endswith("." + suffix) and "visual" not in k]
+        # skip the vision tower and Qwen3.5's multi-token-prediction head (mtp.layers.*, same suffixes; LoRA is
+        # applied to the language model only)
+        hits = [k for k in keys if k.endswith("." + suffix) and "visual" not in k and not k.startswith("mtp.")]
         if len(hits) != 1:
             raise ValueError(f"{suffix}: {len(hits)} matching base tensors {hits[:3]}")
         target[hits[0]] = suffix

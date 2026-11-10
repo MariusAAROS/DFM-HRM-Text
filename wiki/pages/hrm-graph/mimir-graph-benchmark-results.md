@@ -1,10 +1,10 @@
 ---
 type: Runbook
 title: Mimir v1.5 Graph Benchmark - Results and Run Log
-description: "Results and run log of the Mimir v1.5 graph benchmark from 2026-11-03: E0 zero-shot matrix (7 models), E1/E2 LoRA SFT for Mimir v1.5, Qwen2.5-7B and OLMo-3-7B, the generation-cap artefact on trace-trained models, pass@16 headroom for GRPO, and the failures and protocol changes made on the way (memory guard, eval split keys, GRPO response length)."
+description: "Results and run log of the Mimir v1.5 graph benchmark from 2026-11-03: E0 zero-shot matrix (7 models), E1/E2 LoRA SFT for Mimir v1.5, Qwen2.5-7B and OLMo-3-7B, the generation-cap artefact on trace-trained models, pass@16 headroom for GRPO, E3 GRPO test results, the GLM-5.3 zero-shot frontier reference, and the failures and protocol changes made on the way (memory guard, eval split keys, GRPO response length)."
 tags: [graphs, mimir, benchmark, sft, lora, grpo, kgqa, clrs, clutrr, qwen, olmo]
 status: draft
-last_updated: 2026-11-09
+last_updated: 2026-11-10
 confidence: medium
 ---
 # Mimir v1.5 Graph Benchmark - Results and Run Log
@@ -161,6 +161,7 @@ T = 1, 16 samples, 200 rows per file.
 - Qwen3.5-4B E1/E2: at ~1,020 tokens/s about 12 h per E1 and 16 h per E2.
 - GRPO E3 → E4 (+ SFT control) → E3b after the baselines. Estimate at the longer responses: ~9-12 min/step.
 - Not covered: eval of the GRPO checkpoints, retention suite (H4), Gemma-4, Ouro, IFM, Tier 2 sets.
+- Superseded (2026-11-09): E3 finished and was evaluated, see [E3](#e3-grpo-from-e2-results-2026-11-09).
 
 ## GLM-5.3 as a zero-shot frontier reference: setup (2026-11-09)
 
@@ -223,4 +224,156 @@ one CLUTRR row; the visible answers stayed short.
 - GLM has probably seen WebQSP, CWQ, MetaQA and KQA Pro. The gap between its anonymised and named scores measures
   that reliance. GraphQA-fresh and OSM are the cleanest probes.
 
-**Status:** running (`mimir_bench/e0/glm53/queue.log`); results to be added here.
+**Status:** running (`mimir_bench/e0/glm53/queue.log`); results to be added here. Superseded (2026-11-09): `_t3k` results in
+[GLM-5.3 at 3,072 tokens](#glm-53-at-3072-tokens-results-2026-11-09).
+
+## E3 (GRPO from E2): results (2026-11-09)
+
+- **Run:** 200 steps from Mimir E2, W&B run `ypei9ypw`. Crashed at step 186 (2026-11-07) when `/work` vanished
+  during a session shutdown; resumed from the step-175 checkpoint into the same W&B run and finished 2026-11-09.
+- **Model:** `dfm-hrm-graphs/hf/mimir15-e3_grpo_e2-step200` (merged LoRA; the non-weight files are symlinks, copy
+  with `cp -rL`). VeRL checkpoints every 25 steps in `mimir_bench/e3_grpo_e2/ckpt/` (~7 GB each).
+- **In-training val** (~60 questions per dataset, greedy): mean 0.842 (step 0) → 0.866 (100) → 0.899 (175) →
+  0.906 (200). At step 200: GraphQA, MetaQA, KQA Pro 0.983 each, WebQSP 0.780, CLRS 0.800.
+
+Test, `named_t3k` / `anon_t3k` (3,072 tokens, same rows and settings as E2's `_t3k` reports):
+
+| Split | Mimir E1 | Mimir E2 | **Mimir E3** | E3 − E2 |
+| --- | --- | --- | --- | --- |
+| GraphQA test / fresh | 0.858 / - | 0.960 / 0.968 | **0.972 / 0.975** | +0.012 / +0.007 |
+| GraphQA large | 0.732 | 0.800 | **0.811** | +0.011 |
+| MetaQA gold | **0.971** | 0.939 | 0.956 | +0.017 |
+| MetaQA retrieved | **0.732** | 0.645 | 0.678 | +0.033 |
+| KQA Pro gold | 0.924 | 0.936 | **0.950** | +0.014 |
+| KQA Pro retrieved | **0.498** | 0.412 | 0.455 | +0.043 |
+| WebQSP | **0.781** | 0.712 | 0.761 | +0.049 |
+| CWQ (held out) | 0.675 | 0.529 | 0.652 | +0.123 |
+| CLUTRR (held out) | **0.192** | 0.118 | 0.154 | +0.036 |
+| CLRS test | 0.725 | 0.641 | **0.778** | +0.137 |
+| CLRS OOD (held out) | **0.212** | 0.060 | 0.154 | +0.094 |
+| **Macro named** | **0.642** | 0.583 | 0.639 | +0.056 |
+| **Macro anon** | **0.814** | 0.750 | 0.806 | +0.056 |
+
+E1 is at 1,024 tokens (answer-only, its outputs are short). Anon by dataset, E2 → E3: CWQ 0.450 → 0.558,
+KQA Pro 0.925 → 0.932, MetaQA 0.875 → 0.927.
+
+- **GRPO improves on E2 on every split**, most on CLRS (+0.14), the held-out CWQ (+0.12, +0.11 anonymised) and
+  CLRS OOD (+0.09): RL helps more on the splits E2 got worse on than on the ones it already solved.
+- **E3 only gets back to E1's macro (0.639 vs 0.642; 0.806 vs 0.814 anon), it does not pass it.** E3 is best on
+  GraphQA, KQA Pro gold and CLRS test; answer-only E1 is still best on the retrieved subgraphs, WebQSP, CWQ, CLUTRR
+  and CLRS OOD. GRPO on top of trace SFT mostly undoes the cost of the traces. Whether GRPO from E1 or from the
+  base (E3b) does better is open.
+- OSM zero-shot transfer: E3 doubles E2's set accuracy (0.100 vs 0.046), see
+  [OSM KGQA](/pages/hrm-graph/osm-spatial-kgqa.md#zero-shot-results-e3-and-e2-2026-11-09).
+- Pending: E3 val pass@16 (headroom left after RL), E4, E3b. Superseded (2026-11-10): pass@16 in
+  [E3 pass@16](#e3-pass16-and-glm-at-16k-tokens-2026-11-10); E4 and E3b failed at start and were relaunched,
+  see [fails](#fails-and-fixes-2026-11-10).
+
+## GLM-5.3 at 3,072 tokens: results (2026-11-09)
+
+`named_t3k` / `anon_t3k` (effort low, reasoning + answer ≤ 3,072 tokens), 0 API errors. W&B runs: `named_t3k`
+`28vkixpo` (the first upload `73wbsy52` is tagged `superseded`, see the id bug below), `anon_t3k` `w6t7jj7l`.
+Compared with the zero-shot E0 models (1,024 tokens) and E3:
+
+| Split | Mimir E0 | Qwen2.5-7B E0 | OLMo-3-7B E0 | Qwen3.5-4B E0 | **GLM-5.3** | GLM cut off | GLM acc on uncut rows | Mimir E3 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| GraphQA test | 0.423 | 0.543 | 0.522 | 0.444 | **0.688** | 17% | 0.829 | 0.972 |
+| GraphQA fresh | 0.417 | 0.471 | 0.508 | 0.434 | **0.673** | 16% | 0.799 | 0.975 |
+| GraphQA large | 0.354 | 0.431 | 0.433 | 0.471 | **0.616** | 18% | 0.755 | 0.811 |
+| MetaQA gold | 0.584 | 0.689 | 0.662 | 0.743 | **0.846** | 6% | 0.904 | 0.956 |
+| MetaQA retrieved | 0.390 | 0.606 | 0.620 | 0.514 | **0.631** | 10% | 0.698 | 0.678 |
+| KQA Pro gold | 0.259 | 0.671 | 0.556 | 0.682 | **0.769** | 7% | 0.826 | 0.950 |
+| KQA Pro retrieved | 0.131 | 0.329 | 0.280 | 0.296 | **0.334** | 34% | 0.503 | 0.455 |
+| WebQSP | 0.157 | 0.565 | 0.479 | 0.571 | **0.663** | 13% | 0.764 | 0.761 |
+| CWQ | 0.141 | 0.468 | **0.530** | 0.414 | 0.396 | 44% | 0.712 | 0.652 |
+| CLUTRR | 0.010 | 0.188 | 0.096 | 0.189 | **0.209** | 77% | 0.897 | 0.154 |
+| CLRS test | 0.003 | 0.006 | 0.003 | 0.003 | **0.016** | 91% | 0.172 | 0.778 |
+| CLRS OOD | 0.002 | 0.001 | 0.000 | 0.000 | 0.000 | 93% | 0.000 | 0.154 |
+| **Macro named** | 0.198 | 0.405 | 0.377 | - | **0.459** | 40% | | 0.639 |
+
+Anon: CWQ 0.204, KQA Pro 0.632, MetaQA 0.792 (macro 0.543; 40% cut off).
+
+- **GLM is the best zero-shot model on 10 of 12 splits** and the trained Mimir E3 beats it on 11 of 12 (all but CLUTRR).
+- **The 3,072 cap costs GLM most of CLUTRR, CWQ and CLRS:** hidden reasoning fills the budget before the
+  `Answer:` line. On the rows that finish, GLM beats E3 on CLUTRR (0.897) and CWQ (0.712). `_t16k` will measure this.
+- **Answer conventions it was never trained on cost the rest.** GraphQA CycleCheck wants "Yes, there is a cycle";
+  GLM answers "Yes" (93 rows of GraphQA fresh, +0.09 if accepted). CLRS wants the CLRS array conventions (pred `π`
+  arrays, 0/1 masks, matrix layouts); GLM writes NIL / True-False / other layouts.
+- **Anonymised CWQ halves GLM's score (0.396 → 0.204)**, more than the trained models lose (E3 0.652 → 0.558):
+  consistent with GLM drawing on world knowledge for CWQ, but the cut-off rate also differs, so not proven.
+
+## Fails and fixes (2026-11-09)
+
+- **`eval_api` scored 292 KQA Pro rows against the wrong question.** `kqapro/test` and `kqapro/test_retrieved` reuse
+  ids (`kqapro/test/<n>`; 292 shared within the seed-0 named subsets, no other file pair). `eval_api` kept responses
+  in a dict keyed by id, so each shared id got one response scored for both rows. Symptom: GLM KQA Pro gold 0.380,
+  below every 7B baseline, with answers about entities absent from the prompt. Fix: rows keyed by
+  `(source file, id)`; the report was rebuilt from `.partial.jsonl` (every row's own response was stored, no API
+  calls): KQA Pro gold 0.380 → 0.769, all other splits unchanged. `eval_vllm` scores by position and was never
+  affected. GLM's `named_t16k` started before the fix; `mimir_bench/e0/glm53/fix_named_t16k.sh` rebuilds and
+  re-logs it once it is done. **Rule: never key per-row results by `id` alone across bench files.**
+- **The queue logs said `exit 0` for failed runs.** `echo "=== $(date ...) exit $?"` reads `$?` after the `date`
+  command substitution, i.e. always 0. Fixed (`local rc=$?` first) in `run_glm.sh`, `run_osm.sh`, `run_e0.sh`.
+  Effect: GLM `osm_t3k` segfaulted 2 s after start (native crash in the Python process, cause unknown, no core
+  dump in the container), was logged as a success and skipped; the identical command ran fine when relaunched by
+  hand. A missing report `.json` is the reliable failure signal; a relaunch reruns only those.
+
+## E3 pass@16 and GLM at 16k tokens (2026-11-10)
+
+**E3 val pass@16** (T = 1, 16 samples, 200 rows per file, 2,048 tokens; same rows as E2's):
+
+| Val split | pass@1 E2 → E3 | pass@4 E2 → E3 | pass@16 E2 → E3 |
+| --- | --- | --- | --- |
+| GraphQA | 0.972 → 0.986 | 0.990 → 0.994 | 0.995 → 0.995 |
+| MetaQA | 0.863 → 0.945 | 0.950 → 0.965 | 0.965 → 0.970 |
+| KQA Pro | 0.842 → 0.921 | 0.931 → 0.952 | 0.945 → 0.970 |
+| CLRS | 0.648 → 0.789 | 0.793 → 0.853 | 0.885 → 0.895 |
+| WebQSP | 0.578 → 0.713 | 0.694 → 0.777 | 0.735 → 0.810 |
+
+- **GRPO moved pass@1 up towards E2's pass@16 and pass@16 barely moved** (CLRS +0.14 pass@1, +0.01 pass@16). It
+  mostly made reliable what E2 could already sample, the usual RLVR pattern; WebQSP (+0.075 pass@16) is the only
+  split where the reachable set grew noticeably.
+- E2 CLUTRR test pass@16 at 2,048 tokens (reference for E4): pass@1 0.081, pass@4 0.176, pass@16 0.280.
+
+**GLM-5.3 at 16,384 tokens** (`_t16k`, server-default effort, 0 API errors; W&B `named_t16k` run `z5mf2fdv`, the
+first upload `nr6q13mw` is tagged `superseded` (id bug); 58M completion tokens for the named set):
+
+| Split | `_t3k` | `_t16k` | cut off at 16k | Mimir E3 |
+| --- | --- | --- | --- | --- |
+| GraphQA test / fresh / large | 0.688 / 0.673 / 0.616 | 0.784 / 0.756 / 0.681 | 9% / 9% / 15% | 0.972 / 0.975 / 0.811 |
+| MetaQA gold / retrieved | 0.846 / 0.631 | 0.882 / 0.645 | 3% / 13% | 0.956 / 0.678 |
+| KQA Pro gold / retrieved | 0.769 / 0.334 | 0.799 / 0.360 | 2% / 33% | 0.950 / 0.455 |
+| WebQSP | 0.663 | 0.652 | 20% | 0.761 |
+| CWQ | 0.396 | 0.531 | 34% | 0.652 |
+| CLUTRR | 0.209 | **0.523** | 44% | 0.154 |
+| CLRS test / OOD | 0.016 / 0.000 | 0.286 / 0.173 | 43% / 66% | 0.778 / 0.154 |
+| **Macro named** | 0.459 | 0.572 | 27% | 0.639 |
+| **Macro anon** (CWQ / KQA Pro / MetaQA) | 0.543 | 0.607 (0.271 / 0.700 / 0.851) | | 0.806 |
+| OSM test (set acc / F1) | 0.736 / 0.792 | **0.857 / 0.863** | 13% | 0.100 / 0.383 |
+
+- **More budget helps GLM most where its reasoning is long:** CLUTRR +0.31, CLRS +0.27 / +0.17, CWQ +0.14, OSM
+  +0.12. Even at 16k, 27% of named rows are still cut off inside the hidden reasoning.
+- **E3 still leads on macro (0.639 vs 0.572)**: GLM wins CLUTRR (0.523 vs 0.154), CLRS OOD (0.173 vs 0.154) and
+  OSM; E3 wins the trained in-distribution splits and CWQ.
+
+## Fails and fixes (2026-11-10)
+
+- **E4 GRPO and E3b crashed at start** (2026-11-09 23:32 / 23:47, ~20 s each): `ValueError: [actor_rollout_ref.ref]
+  Please set at least one of 'actor_rollout_ref.ref.log_prob_micro_batch_size' or '..._per_gpu'`. They are the first
+  arms with `REF_KL=True` (default for every arm but E3, decided 2026-11-06), which adds the reference-policy worker;
+  `run_grpo_graph.sh` never set its micro-batch. Fix: `actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=
+  ${LOGPROB_MICRO_BATCH_PER_GPU}`; checked offline with VeRL's `validate_config` on E4's exact overrides. Queue
+  relaunched (`mimir_bench/run_rl_arms.running9.sh`).
+- **E4 SFT control crashed at start:** `graph_inject.train` parsed `model=mimir` and `model.hf_dir=...` in one
+  OmegaConf dotlist, so the overrides turned `model` into a dict and the config lookup failed
+  (`configs/models/{'name': ...}.yaml`). Fix: `load_config` takes `dataset=`/`model=`/`method=` out first, then
+  merges the rest; `model.<key>=` overrides now work.
+- **Qwen3.5-4B baseline SFT: training finished, merge failed** (`layers.0.mlp.down_proj.weight: 2 matching base
+  tensors`): the checkpoint has a multi-token-prediction head (`mtp.layers.*`) with the same suffixes as the LM
+  layers. Fix: `sft_hf.merge` skips `mtp.*` (as it skips `visual`). The answer arm was merged by hand (248 pairs).
+  The cot arm was training when this was found and will hit the same error; `sft_baselines/qwen35_followup.sh` waits
+  for the queue, merges it, and runs the four Qwen3.5-4B evals. **Do not relaunch `run_sft_baselines.sh` for an arm
+  that trained but did not merge: it retrains any arm without `merged_ep3` and overwrites `train.log`;** use
+  `sft_hf --merge-only 3`.
+- The 2026-11-09 watcher that re-logged GLM `named_t16k` could not tag the old run: `.wandb` markers hold two lines
+  (run path, version), read with `head -1`, not `awk '{print $1}'`.

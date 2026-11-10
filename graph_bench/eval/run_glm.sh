@@ -31,7 +31,7 @@ run() {  # cond tokens effort extra files...
   local eff=""; [ -n "$effort" ] && eff="--reasoning-effort $effort"
   bash scripts/graphs/mem_guard.sh 16 -- $PY -m graph_bench.eval.eval_api --model zai-org/GLM-5.3 \
     --max-tokens $tokens $eff --concurrency $CONC $extra --out $out "$@" >> $OUT/$cond.log 2>&1 < /dev/null
-  echo "=== $(date '+%F %T') $cond exit $?"
+  local rc=$?; echo "=== $(date '+%F %T') $cond exit $rc"
   [ -f "$out" ] && .venv/bin/python -m graph_bench.eval.log_wandb $out >> $OUT/wandb.log 2>&1 < /dev/null
 }
 

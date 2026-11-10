@@ -29,7 +29,7 @@ evaluate() {  # arm model_name model max_model_len
   bash scripts/graphs/mem_guard.sh 48 -- $PY -m graph_bench.eval.eval_vllm --model $3 --style instruct \
     --enable-thinking false --max-tokens 3072 --max-model-len $4 --gpu-memory-utilization 0.85 --enforce-eager \
     --n 1 --temperature 0 --pass-k 1 --out $out $DATA > ${out%.json}.log 2>&1 < /dev/null
-  echo "=== $(date '+%F %T') exit $?"
+  local rc=$?; echo "=== $(date '+%F %T') exit $rc"
   exec 9>&-
   .venv/bin/python -m graph_bench.eval.log_wandb $out >> $ROOT/osm_wandb.log 2>&1 < /dev/null
 }

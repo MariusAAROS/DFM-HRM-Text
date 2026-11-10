@@ -51,11 +51,14 @@ CONFIG_DIR = os.path.join(os.path.dirname(__file__), "configs")
 
 
 def load_config(argv: list[str]):
-    cli = OmegaConf.from_dotlist(argv)
+    # dataset= / model= / method= name config files; taken out first so that model.<key>=... overrides (e.g.
+    # model.hf_dir) merge into the loaded model config instead of replacing the name with a dict
+    names = dict(a.split("=", 1) for a in argv if a.split("=", 1)[0] in ("dataset", "model", "method"))
+    cli = OmegaConf.from_dotlist([a for a in argv if a.split("=", 1)[0] not in names])
     cfg = OmegaConf.load(os.path.join(CONFIG_DIR, "base.yaml"))
-    cfg = OmegaConf.merge(cfg, OmegaConf.load(os.path.join(CONFIG_DIR, "datasets", f"{cli.pop('dataset', 'graphqa')}.yaml")))
-    cfg.model = OmegaConf.load(os.path.join(CONFIG_DIR, "models", f"{cli.pop('model')}.yaml"))
-    method_cfg = OmegaConf.load(os.path.join(CONFIG_DIR, "methods", f"{cli.pop('method')}.yaml"))
+    cfg = OmegaConf.merge(cfg, OmegaConf.load(os.path.join(CONFIG_DIR, "datasets", f"{names.get('dataset', 'graphqa')}.yaml")))
+    cfg.model = OmegaConf.load(os.path.join(CONFIG_DIR, "models", f"{names['model']}.yaml"))
+    method_cfg = OmegaConf.load(os.path.join(CONFIG_DIR, "methods", f"{names['method']}.yaml"))
     cfg = OmegaConf.merge(cfg, method_cfg.pop("train", {}), {"method": method_cfg}, cli)
     return cfg
 

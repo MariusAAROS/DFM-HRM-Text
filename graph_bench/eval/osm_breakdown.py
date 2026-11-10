@@ -41,7 +41,7 @@ def main():
     args = ap.parse_args()
     out = {}
     for p in args.samples:
-        name = f"{p.parent.parent.name}/{p.parent.name}"  # <arm>/<model>
+        name = f"{p.parent.parent.name}/{p.parent.name}/{p.name.split('.')[0]}"  # <arm>/<model>/<report>
         out[name] = breakdown(p)
     keys = ["all", "1hop", "2hop", "3hop", "4hop", "2-4hop/chain", "2-4hop/shortcut"]
     print("| run | " + " | ".join(keys) + " |")

@@ -4,7 +4,7 @@ title: OSM Spatial Multi-Hop QA as KGQA
 description: The OSM Paris multi-hop spatial question set (data/osm), evidence that it can be cast as KGQA (entity linking, relation rules recovered from the gold answers, re-answering from the tables), and the train/val/test KGQA build in data/osm/kgqa.
 tags: [graphs, kgqa, osm, spatial, dataset]
 status: stable
-last_updated: 2026-11-09
+last_updated: 2026-11-10
 confidence: high
 ---
 # OSM Spatial Multi-Hop QA as KGQA
@@ -31,7 +31,8 @@ records the evidence and the train/val/test build.
     rules, solver.
   - [`scripts/osm/build_kgqa.py`](../../../scripts/osm/build_kgqa.py): dataset build.
   - [`scripts/osm/check_kgqa.py`](../../../scripts/osm/check_kgqa.py): checks.
-- **Output:** `data/osm/kgqa/{train,val,test}.jsonl` (see its `README.md`). No model has been trained or
+- **Output:** `data/osm/kgqa/{train,val,test}.jsonl` (see its `README.md`). Build steps and noising, current
+  version: [Build recipe and noising steps](#build-recipe-and-noising-steps-of-the-current-build-2026-11-09). No model has been trained or
   evaluated on it yet.
   Superseded (2026-11-09): a zero-shot eval of the Mimir benchmark models is queued, see
   [Zero-shot transfer eval](#zero-shot-transfer-eval-of-the-mimir-benchmark-models-2026-11-09).
@@ -306,4 +307,119 @@ areas) appear in no training set.
   - E2 − base: what the trace SFT adds.
   - The 7B models show whether Mimir's score is high or low for this task.
 - **Status:** queued (`mimir_bench/osm_queue.log`); no results yet. If E3 fails instead of finishing, the queue
-  waits indefinitely; then point it at the last E3 checkpoint.
+  waits indefinitely; then point it at the last E3 checkpoint. Superseded (2026-11-09): first results in
+  [Zero-shot results: E3 and E2](#zero-shot-results-e3-and-e2-2026-11-09).
+
+## Zero-shot results: E3 and E2 (2026-11-09)
+
+All 2,000 test rows, greedy, settings above. GLM-5.3 (API, zero-shot, reasoning + answer ≤ 3,072 tokens, effort
+low; see [GLM reference](/pages/hrm-graph/mimir-graph-benchmark-results.md#glm-53-at-3072-tokens-results-2026-11-09))
+added as a frontier reference. Cells: set accuracy / set-F1.
+
+| Model | All | 1 hop | 2 hops | 3 hops | 4 hops | 2–4 hops, chain (1,152) | 2–4 hops, shortcut (348) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Mimir E2 (trace SFT) | 0.046 / 0.210 | 0.096 / 0.465 | 0.058 / 0.253 | 0.018 / 0.076 | 0.014 / 0.048 | 0.024 / 0.114 | 0.049 / 0.165 |
+| Mimir E3 (GRPO from E2) | 0.100 / 0.383 | 0.128 / 0.558 | 0.128 / 0.448 | 0.084 / 0.318 | 0.058 / 0.209 | 0.083 / 0.311 | 0.112 / 0.370 |
+| GLM-5.3 | **0.736 / 0.792** | 0.928 / 0.959 | 0.748 / 0.824 | 0.680 / 0.747 | 0.588 / 0.638 | 0.642 / 0.716 | 0.770 / 0.805 |
+
+- **The benchmark-tuned Mimir does not transfer to OSM:** 0.100 set accuracy for E3. RL doubles E2's score and
+  the gain grows with depth (4 hops 0.014 → 0.058), but both are far from usable.
+- **How E3 fails** (read on samples): 13.5% of rows end in a repetition loop with no `Answer:` line; elsewhere it
+  writes its KGQA program-style trace and returns an over-inclusive set (e.g. both "Gare du Nord (Métro)" and
+  "Gare du Nord (gare routière)" where one was asked). Set-F1 (0.383) is well above accuracy for this reason.
+- **The task itself is solvable from the prompt zero-shot:** GLM gets 0.736 with 17% of rows cut off by the cap
+  (345 of 2,000), 0.93 at 1 hop and 0.59 at 4 hops. Shortcut rows are easier than chain rows for every model.
+- Pending: base Mimir v1.5, Qwen2.5-7B and OLMo-3-7B (E0 and E2) in `run_osm.sh`; GLM `osm_t16k`. Superseded
+  (2026-11-10): [all models](#zero-shot-results-all-models-2026-11-10). W&B: E3/E2 in
+  groups `mimir-bench-e3` / `mimir-bench-e2`, GLM run `gcfqvsmo`.
+
+## Zero-shot results: all models (2026-11-10)
+
+All 2,000 test rows, same settings; GLM at both budgets. `mimir_bench/osm_breakdown.json` (rows named
+`<arm>/<model>/<report>`). Cells: set accuracy / set-F1.
+
+| Model | All | 1 hop | 2 hops | 3 hops | 4 hops | 2–4 chain (1,152) | 2–4 shortcut (348) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Mimir v1.5 base (E0) | 0.003 / 0.021 | 0.008 / 0.057 | 0.002 / 0.020 | 0.000 / 0.005 | 0.000 / 0.001 | 0.001 / 0.009 | 0.000 / 0.006 |
+| Mimir E2 | 0.046 / 0.210 | 0.096 / 0.465 | 0.058 / 0.253 | 0.018 / 0.076 | 0.014 / 0.048 | 0.024 / 0.114 | 0.049 / 0.165 |
+| Mimir E3 | **0.100 / 0.383** | 0.128 / 0.558 | 0.128 / 0.448 | 0.084 / 0.318 | 0.058 / 0.209 | 0.083 / 0.311 | 0.112 / 0.370 |
+| Qwen2.5-7B E0 | 0.090 / 0.278 | 0.078 / 0.365 | 0.118 / 0.311 | 0.106 / 0.261 | 0.058 / 0.178 | 0.082 / 0.230 | 0.132 / 0.316 |
+| Qwen2.5-7B E2 | 0.029 / 0.210 | 0.046 / 0.396 | 0.030 / 0.231 | 0.016 / 0.120 | 0.024 / 0.094 | 0.012 / 0.144 | 0.060 / 0.165 |
+| OLMo-3-7B E0 | 0.063 / 0.340 | 0.102 / 0.521 | 0.042 / 0.313 | 0.058 / 0.270 | 0.050 / 0.254 | 0.021 / 0.232 | 0.147 / 0.436 |
+| OLMo-3-7B E2 | 0.046 / 0.220 | 0.076 / 0.447 | 0.052 / 0.233 | 0.032 / 0.129 | 0.024 / 0.072 | 0.024 / 0.121 | 0.075 / 0.225 |
+| GLM-5.3, 3,072 tokens | 0.736 / 0.792 | 0.928 / 0.959 | 0.748 / 0.824 | 0.680 / 0.747 | 0.588 / 0.638 | 0.642 / 0.716 | 0.770 / 0.805 |
+| GLM-5.3, 16,384 tokens | **0.857 / 0.863** | 0.980 / 0.987 | 0.910 / 0.913 | 0.802 / 0.813 | 0.736 / 0.737 | 0.784 / 0.791 | 0.922 / 0.922 |
+
+- **Every ≤ 7B model fails OSM zero-shot (≤ 0.10 set accuracy).** E3 is the best of them, just above
+  Qwen2.5-7B E0 (0.090); base Mimir v1.5 almost never produces the exact set.
+- **Trace SFT (E2) hurts the 7B models on OSM** (Qwen2.5 0.090 → 0.029, OLMo-3 0.063 → 0.046) and helps Mimir only
+  from near zero (0.003 → 0.046); GRPO then doubles Mimir's score. The benchmark training transfers format, not
+  spatial reasoning.
+- **GLM at 16k reaches 0.857** (13% of rows still cut off), 0.74 at 4 hops: the dataset is answerable from the
+  prompt, and it is a hard zero-shot probe that separates frontier from ≤ 7B models.
+- Answer to the question of this section: no, the GRPO-tuned Mimir is not usable zero-shot for this downstream
+  geospatial task; it would need OSM training data.
+
+## Build recipe and noising steps of the current build (2026-11-09)
+
+This section summarises how the current `data/osm/kgqa` is built. It describes the build made after the
+hop-distractor fix, with the `build_kgqa.py` defaults (`build_config.json`, seed 0). The sections above keep
+the history.
+
+**From the source tables to a sample.**
+
+| # | step | what it does |
+| --- | --- | --- |
+| 1 | dedup | `df_multihop` on `query_texte`: 1,177,868 → 1,176,265 questions |
+| 2 | split | md5 of the innermost sub-question: 10% of groups to test, 5% to val, 85% to train. Groups that contain a `df_dump_question` question are forced into test; they are large, so test holds 41% of the pool |
+| 3 | sample | random order per (split, depth); test puts dump-eval questions first. Stops at 5,000 / 250 / 500 rows per depth 1–4 |
+| 4 | filter | parse, link anchors by exact name, solve with the `osm_kg.py` rules, drop on any check below. 28,237 of 174,195 candidates pass (16%); 23,000 kept |
+| 5 | gold path | final answers; then, for each POI at hop *i*, the **nearest** uniquely named POI of hop *i−1* for which the hop relation holds. One supporter per POI, not the whole inner answer set |
+| 6 | noise | distractors per hop (next table) |
+| 7 | facts | for every described POI of hop *i*: its `category`, plus the attributes hop *i* filters on (cuisine, seating); every named-anchor clause of hop *i* that holds for it; the hop relation to every described POI of hop *i−1* for which it holds. Closed world among the described entities; mean 58 facts |
+| 8 | prompt | facts deduplicated, sorted, shuffled with a qid-seeded RNG; `#### Question` header + `(s, p, o)` lines + `Q: <question>\nA: `. Response: answer names `\|`-joined |
+
+Filters of step 4, with the candidates each one removed (`build_stats.csv`):
+
+| filter | dropped |
+| --- | --- |
+| a named POI anchor is shared by several POIs | 98,799 |
+| an answer name is not unique (case-insensitive) | 16,345 |
+| not 1–10 answers | 15,341 |
+| rules do not reproduce the gold set exactly | 6,564 |
+| an answer has no uniquely named supporter at an inner hop | 6,548 |
+| an inner level has > 50 POIs | 1,145 |
+| outer attribute filter not stated in the text | 854 |
+| an anchor links to no entity | 271 |
+| > 3,000 prompt tokens / > 200 facts | 78 / 13 |
+
+**Noising steps (distractors), per hop.**
+- **Never used as a distractor:** a POI that is valid at that hop, a POI whose name is shared by several POIs
+  (case-insensitive), or a POI named like a question anchor.
+- **How "fails a clause" is judged:** the hop clause is evaluated against the full previous answer set.
+
+| distractor | hops | max per hop | candidate pool | passes | fails | purpose |
+| --- | --- | --- | --- | --- | --- | --- |
+| near-miss | all | 3 | ≤ 1.5 km of that hop's gold-path POIs | attributes and all clauses but one | exactly one clause | forces checking every clause |
+| 2-clause miss (fill) | all, if the two rows above give < 4 and the hop has ≥ 2 clauses | up to 4 in total | same | attributes | two clauses | tops up rows with few near-misses |
+| attribute miss | all | 1 | same | all clauses | an attribute (same category preferred, e.g. wrong cuisine) | forces checking attributes |
+| hop distractor | 2+ | 2 | whole map | attributes and every named-anchor clause | the hop relation to every valid previous-hop POI | defeats the outer-hop shortcut |
+
+- **How a hop distractor is linked:** each one gets a true hop-relation link to an **invalid** POI of the
+  previous hop. A POI with the previous hop's attributes is preferred, otherwise any category.
+- **That invalid POI is described too.** It enters the previous hop's described set, so it gets its own facts.
+
+**Remaining shortcut on the whole dataset** (`check_kgqa.shortcut_cause` on all 23,000 rows; 1-hop rows cannot
+have it):
+
+| split | rows | unfixable: dataset | % of 2–4-hop rows | % of split | names shared | needs inner hops |
+| --- | --- | --- | --- | --- | --- | --- |
+| train | 20,000 | 2,681 | 17.9% | 13.4% | 159 | 12,160 (81.1%) |
+| val | 1,000 | 134 | 17.9% | 13.4% | 6 | 610 (81.3%) |
+| test | 2,000 | 322 | 21.5% | 16.1% | 26 | 1,152 (76.8%) |
+| all | 23,000 | **3,137** | **18.2%** | **13.6%** | 191 (0.8%) | 13,922 (80.7%) |
+
+- **What "unfixable: dataset" counts:** 3,136 hop-redundant rows plus 1 row where the hop removes only isolated
+  POIs. No prompt can make the chain necessary for them.
+- **By depth (all splits):** 13.5% at 2 hops, 21.8% at 3, 19.3% at 4.
+- **`builder` cause:** 0 in every split.

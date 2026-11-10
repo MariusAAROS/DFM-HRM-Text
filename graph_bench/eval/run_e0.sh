@@ -49,7 +49,7 @@ run() {  # name cond model style maxlen extra files...
   bash scripts/graphs/mem_guard.sh 48 -- $PY -m graph_bench.eval.eval_vllm --model "$model" --style $style $think \
     --max-tokens $tokens --max-model-len $maxlen --gpu-memory-utilization 0.85 --enforce-eager --limit ${LIMIT:-1000} \
     --n 1 --temperature 0 --pass-k 1 $extra --out $out "$@" > $OUT/$name/$cond.log 2>&1 < /dev/null
-  echo "=== $(date '+%F %T') $name $cond exit $?"
+  local rc=$?; echo "=== $(date '+%F %T') $name $cond exit $rc"
   exec 9>&-
 }
 

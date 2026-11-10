@@ -11,6 +11,9 @@ and /nothink are all ignored), max_tokens is ignored, max_completion_tokens caps
 reasoning_effort accepts only "low". Benchmark setting (user, 2026-11-09): --max-tokens 3072 --reasoning-effort low,
 i.e. the other models' total budget, split by GLM between hidden reasoning and answer.
 
+Rows are keyed by (source file, id): ids repeat across files (kqapro/test and kqapro/test_retrieved share 292 ids
+in the named set), and keying by id alone scored one response against both rows (fixed 2026-11-09).
+
 Long runs are resumable: every finished row is appended to <out>.partial.jsonl and skipped on restart; the report is
 written once every row is done. Rows that still fail after --retries score 0 and stay in the denominator
 (report: api_errors). Credentials come from --env (default: the repo's .env, GLM_SERVER / GLM_API_KEY); the key is
@@ -81,7 +84,7 @@ async def run(args, recs, sources, partial: Path, done: dict):
     client = AsyncOpenAI(base_url=env[args.server_var], api_key=env[args.key_var], timeout=args.timeout,
                          max_retries=0)
     sem = asyncio.Semaphore(args.concurrency)
-    todo = [(r, s) for r, s in zip(recs, sources) if r.id not in done]
+    todo = [(r, s) for r, s in zip(recs, sources) if (s, r.id) not in done]
     print(f"{len(recs)} records, {len(done)} already done, {len(todo)} to call", flush=True)
     t0, n_done = time.time(), 0
     with open(partial, "a", encoding="utf-8") as f:
@@ -91,7 +94,7 @@ async def run(args, recs, sources, partial: Path, done: dict):
             row = {"id": rec.id, "source": src, **out}
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
             f.flush()
-            done[rec.id] = row
+            done[src, rec.id] = row
             n_done += 1
             if n_done % 100 == 0 or n_done == len(todo):
                 el = time.time() - t0
@@ -132,13 +135,13 @@ def main():
             if line.strip():
                 row = json.loads(line)
                 if not row.get("error"):  # failed rows are retried on restart
-                    done[row["id"]] = row
+                    done[row["source"], row["id"]] = row
     asyncio.run(run(args, recs, sources, partial, done))
 
     rows, errors, cut, usage = [], 0, 0, {"prompt_tokens": 0, "completion_tokens": 0}
     with open(out_path.with_suffix(".samples.jsonl"), "w", encoding="utf-8") as f:
         for rec, source in zip(recs, sources):
-            g = done[rec.id]
+            g = done[source, rec.id]
             errors += bool(g.get("error"))
             cut += g.get("finish") == "length"
             for k in usage:
@@ -156,8 +159,8 @@ def main():
               "enforce_eager": None, "shortened": 0, "skipped_no_room": 0, "backend": "openai-api",
               "server_host": urlparse(server).netloc, "enable_thinking": args.enable_thinking,
               "reasoning_effort": args.reasoning_effort, "token_cap": "max_completion_tokens (reasoning + answer)",
-              "api_errors": errors, "finish_length": cut, "with_reasoning": sum(bool(done[r.id].get("reasoning"))
-                                                                               for r in recs),
+              "api_errors": errors, "finish_length": cut,
+              "with_reasoning": sum(bool(done[s, r.id].get("reasoning")) for r, s in zip(recs, sources)),
               "usage": usage, "summary": summarize(rows, [1])}
     out_path.write_text(json.dumps(report, indent=2))
     print(json.dumps({k: v for k, v in report["summary"].items() if "/" not in k}, indent=1))

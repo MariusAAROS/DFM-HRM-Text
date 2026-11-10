@@ -117,6 +117,7 @@ cd "$REPO"
   actor_rollout_ref.rollout.enable_chunked_prefill=False \
   actor_rollout_ref.rollout.calculate_log_probs=True \
   actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=${LOGPROB_MICRO_BATCH_PER_GPU} \
+  actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=${LOGPROB_MICRO_BATCH_PER_GPU} \
   reward_model.enable=False \
   reward.custom_reward_function.path=$REPO/graph_bench/rl/reward.py \
   reward.custom_reward_function.name=compute_score \
