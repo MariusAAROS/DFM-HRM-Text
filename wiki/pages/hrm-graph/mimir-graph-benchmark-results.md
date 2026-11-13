@@ -4,7 +4,7 @@ title: Mimir v1.5 Graph Benchmark - Results and Run Log
 description: "Results and run log of the Mimir v1.5 graph benchmark from 2026-11-03: E0 zero-shot matrix (7 models), E1/E2 LoRA SFT for Mimir v1.5, Qwen2.5-7B and OLMo-3-7B, the generation-cap artefact on trace-trained models, pass@16 headroom for GRPO, E3 GRPO test results, the GLM-5.3 zero-shot frontier reference, and the failures and protocol changes made on the way (memory guard, eval split keys, GRPO response length)."
 tags: [graphs, mimir, benchmark, sft, lora, grpo, kgqa, clrs, clutrr, qwen, olmo]
 status: draft
-last_updated: 2026-11-10
+last_updated: 2026-11-13
 confidence: medium
 ---
 # Mimir v1.5 Graph Benchmark - Results and Run Log
@@ -377,3 +377,190 @@ first upload `nr6q13mw` is tagged `superseded` (id bug); 58M completion tokens f
   `sft_hf --merge-only 3`.
 - The 2026-11-09 watcher that re-logged GLM `named_t16k` could not tag the old run: `.wandb` markers hold two lines
   (run path, version), read with `head -1`, not `awk '{print $1}'`.
+
+## E4 (CLUTRR adaptation), Qwen3.5-4B E1/E2, training token counts (2026-11-12)
+
+### E4: GRPO vs answer-only SFT on CLUTRR, both from E2
+
+- **E4 GRPO:** 100 steps from Mimir E2 on `verl_clutrr/train.parquet` (16 prompts x 8 rollouts per step, so 1,600 of
+  the 12,064 train questions), 18.8 h, W&B run `nxi4ijiz`. Training reward 0.40 (step 1) → ~0.70 (steps 98-100).
+  Model `hf/mimir15-e4_grpo_clutrr-step100`.
+- **E4 SFT control:** LoRA SFT on the answer line of all 12,064 CLUTRR train rows (`sft/clutrr_answer.jsonl`), 1 epoch,
+  ~195 steps, 4 minutes. Model `hf/mimir15-e4-sft-clutrr-ep1`. It sees 7.5x more questions than GRPO, each with its gold
+  answer.
+- Eval W&B runs (group `mimir-bench-e4` / `mimir-bench-e4sft`): `5ybso0xm`, `yhj2bhf6`, `hm3x8g12` (GRPO: named, anon,
+  CLUTRR pass@16); `r5tgut81`, `vkd93b1t`, `33xbm6bq` (control).
+
+Test, `named_t3k` / `anon_t3k` (3,072 tokens, same rows as E2 / E3):
+
+| Split | Mimir E2 | Mimir E3 | **E4 GRPO** | **E4 SFT control** |
+| --- | --- | --- | --- | --- |
+| CLUTRR (the adapted task) | 0.118 | 0.154 | 0.281 | **0.916** |
+| GraphQA test / fresh | 0.960 / 0.968 | 0.972 / 0.975 | 0.963 / 0.969 | 0.657 / 0.600 |
+| GraphQA large | 0.800 | 0.811 | 0.797 | 0.497 |
+| MetaQA gold | 0.939 | 0.956 | 0.941 | 0.948 |
+| MetaQA retrieved | 0.645 | 0.678 | 0.695 | 0.735 |
+| KQA Pro gold | 0.936 | 0.950 | 0.943 | 0.913 |
+| KQA Pro retrieved | 0.412 | 0.455 | 0.441 | 0.497 |
+| WebQSP | 0.712 | 0.761 | 0.731 | 0.705 |
+| CWQ (held out) | 0.529 | 0.652 | 0.605 | 0.640 |
+| CLRS test | 0.641 | 0.778 | 0.659 | 0.444 |
+| CLRS OOD (held out) | 0.060 | 0.154 | 0.063 | 0.051 |
+| **Macro named** | 0.583 | 0.639 | 0.628 | 0.661 |
+| **Macro anon** | 0.750 | 0.806 | 0.791 | 0.813 |
+
+CLUTRR test, 16 samples per question at temperature 1.0, 2,048 tokens (200 questions):
+
+| | E2 | E4 GRPO | E4 SFT control |
+| --- | --- | --- | --- |
+| pass@1 | 0.081 | 0.343 | 0.906 |
+| pass@4 | 0.176 | 0.373 | 0.945 |
+| pass@16 | 0.280 | 0.390 | 0.965 |
+
+- **For a new task with answers but no traces, answer-only SFT adapts far better than GRPO here** (CLUTRR 0.916 vs
+  0.281), at 1/280 of the compute. By hop count the control stays above 0.84 up to k=10; GRPO falls from 1.00 (k=2) to
+  0.13 (k=10). Not a matched comparison: the control saw every train question with its answer, GRPO 13% of them with
+  only a reward.
+  Superseded in part (2026-11-13): the CycleCheck 0.98 → 0.00 quoted below is an answer-format artefact, not lost
+  reasoning, see [CycleCheck scoring](#e3b-grpo-from-base-mimir-and-the-benchmarks-findings-2026-11-13).
+- **The control pays for it by dropping the traces everywhere.** Median generation length goes from ~280 characters
+  (E2, and E4 GRPO) to 11-42 on every dataset: the model answers directly. Tasks that need the trace collapse:
+  GraphQA CycleCheck 0.98 → 0.00, TriangleCounting 0.71 → 0.15, MaximumFlow 0.70 → 0.28, EdgeCount 0.90 → 0.30;
+  CLRS dfs 0.34 → 0.01, topological_sort 0.35 → 0.00. KGQA, where E1 already showed the trace costs accuracy, goes up
+  (MetaQA retrieved +0.09, KQA Pro retrieved +0.085, CWQ +0.11). Its higher macro (0.661) is the CLUTRR gain plus this
+  E1-like KGQA gain, minus the algorithmic loss.
+- **E4 GRPO forgets nothing:** every other split is within noise of E2, or above it (CWQ +0.076, MetaQA retrieved
+  +0.05), and generation lengths are unchanged.
+- **GRPO stopped exploring on CLUTRR:** pass@16 is 0.390 against pass@1 0.343 (E2: 0.280 vs 0.081). The policy became
+  near-deterministic at a low score; more steps at this setting are unlikely to help.
+
+### Qwen3.5-4B E1 / E2 (completes the baseline table)
+
+Same recipe and rows as the other baselines; E1 at 1,024 tokens, E2 at 3,072. W&B groups `mimir-bench-e1` / `-e2`,
+model `qwen35_4b`.
+
+| Split | Qwen3.5-4B E1 | Qwen3.5-4B E2 |
+| --- | --- | --- |
+| GraphQA test / fresh | 0.673 / 0.604 | 0.914 / 0.921 |
+| GraphQA large | 0.580 | 0.791 |
+| MetaQA gold | 0.910 | 0.894 |
+| MetaQA retrieved | 0.710 | 0.673 |
+| KQA Pro gold | 0.938 | 0.934 |
+| KQA Pro retrieved | 0.491 | 0.413 |
+| WebQSP | 0.773 | 0.731 |
+| CWQ (held out) | 0.675 | 0.435 |
+| CLUTRR (held out) | 0.236 | 0.000 |
+| CLRS test | 0.545 | 0.562 |
+| CLRS OOD (held out) | 0.071 | 0.039 |
+| **Macro named** | 0.590 | 0.543 |
+| **Macro anon** | 0.796 | 0.717 |
+
+- Same pattern as the 7B baselines: E1 0.590 (Qwen2.5 0.589, OLMo-3 0.577), below Mimir E1 (0.642); traces help
+  GraphQA and lower the macro; E2 breaks CLUTRR completely (0.000).
+- It is the best baseline with entities anonymised after E1 (0.796 vs 0.732 / 0.758; Mimir 0.814).
+
+### Tokens Mimir trained on (E2 SFT + E3 GRPO)
+
+E2: `train_cot.jsonl` re-encoded with the trainer's own code (reproduces the logged 2,671 / 2,666 / 2,663 steps per
+epoch). E3: sum of VeRL's per-step `perf/total_num_tokens`, `prompt_length/mean` and `response_length/mean` over steps
+1-200, last attempt of each resumed step.
+
+| Tokens | E2 (SFT, 3 epochs) | E3 (GRPO, 200 steps) | E2 + E3 |
+| --- | --- | --- | --- |
+| Processed | 59.6M | 36.8M | 96.4M |
+| - prompt (context, no loss) | 40.8M | 23.2M (each prompt x 8 rollouts) | 64.0M |
+| - response (carries loss) | 18.7M | 13.6M | 32.4M |
+| Unique | 19.9M (13.6M prompt + 6.25M response) | 16.5M (2.9M prompt + 13.6M response) | ~33.5M-36.4M |
+
+- E3 took 3,200 prompt groups of the 16,055 in `verl/train.parquet` (epoch 0 only, ~20% of the set). Its prompts are
+  E2's questions (rough string match: ~90% found in the SFT file), so E3's new material is its own 13.6M sampled
+  response tokens; hence the range for the combined unique count.
+- Dynamic sampling discarded 14,296 sequences whose group had a constant reward, plus 877 surplus ones: ~54% of E3's
+  generation was not trained on. Their lengths are not logged (estimate: ~8M tokens).
+- E2's 2,600 replay rows are general-purpose data: 1.3M of the 19.9M tokens per epoch.
+
+### Still running
+
+E3b (GRPO from base Mimir, 200 steps): step 160 on 2026-11-12 21:00 at ~14 min/step, training reward 0.43 (step 1) →
+0.44-0.60. Evals (`e3b/mimir15`) follow from the queue; nothing logs them to W&B automatically.
+
+## E3b (GRPO from base Mimir) and the benchmark's findings (2026-11-13)
+
+- **Run:** 200 steps from base Mimir v1.5 on the same `verl/train.parquet` and settings as E3, 46.8 h, W&B run
+  `ji86q6s0`. Training reward 0.47 (steps 1-10) → 0.59 (91-100) → 0.54 (191-200). Model
+  `hf/mimir15-e3b_grpo_base-step200`. The RL queue is finished; the GPU is free.
+- **In-training val** (~60 questions per dataset, greedy), step 0 → 100 → 200: KQA Pro 0.339 → 0.932 → 0.966,
+  WebQSP 0.153 → 0.593 → 0.661, MetaQA 0.767 → 0.917 → 0.917, GraphQA 0.450 → 0.767 → 0.833, CLRS 0.000 → 0.067 → 0.083.
+- Eval W&B runs (group `mimir-bench-e3b`): `ittjzkpt` (named), `gmv5xt0n` (anon), `0582ql5x` (val pass@16).
+
+Test, `named_t3k` / `anon_t3k` (E0 and E1 at 1,024 tokens, the rest at 3,072; same rows):
+
+| Split | Mimir E0 (base) | Mimir E1 | Mimir E2 | Mimir E3 (GRPO from E2) | **Mimir E3b (GRPO from base)** |
+| --- | --- | --- | --- | --- | --- |
+| GraphQA test / fresh | 0.423 / 0.417 | 0.858 / 0.858 | 0.960 / 0.968 | **0.972 / 0.975** | 0.778 / 0.744 |
+| GraphQA large | 0.354 | 0.732 | 0.800 | **0.811** | 0.669 |
+| MetaQA gold | 0.584 | **0.971** | 0.939 | 0.956 | 0.895 |
+| MetaQA retrieved | 0.390 | **0.732** | 0.645 | 0.678 | 0.724 |
+| KQA Pro gold | 0.259 | 0.924 | 0.936 | **0.950** | 0.906 |
+| KQA Pro retrieved | 0.131 | **0.498** | 0.412 | 0.455 | **0.498** |
+| WebQSP | 0.157 | **0.781** | 0.712 | 0.761 | 0.685 |
+| CWQ (held out) | 0.141 | **0.675** | 0.529 | 0.652 | 0.625 |
+| CLUTRR (held out) | 0.010 | 0.192 | 0.118 | 0.154 | **0.193** |
+| CLRS test | 0.003 | 0.725 | 0.641 | **0.778** | 0.097 |
+| CLRS OOD (held out) | 0.002 | **0.212** | 0.060 | 0.154 | 0.031 |
+| **Macro named** | 0.198 | **0.642** | 0.583 | 0.639 | 0.542 |
+| **Macro anon** | 0.280 | **0.814** | 0.750 | 0.806 | 0.744 |
+
+Val pass@1 / pass@4 / pass@16 (200 questions per dataset, 16 samples, temperature 1.0, 2,048 tokens):
+
+| Dataset | E2 | E3 | E3b |
+| --- | --- | --- | --- |
+| CLRS | 0.648 / 0.793 / 0.885 | 0.789 / 0.853 / 0.895 | 0.090 / 0.101 / 0.125 |
+| GraphQA | 0.972 / 0.990 / 0.995 | 0.986 / 0.994 / 0.995 | 0.762 / 0.823 / 0.840 |
+| KQA Pro | 0.842 / 0.931 / 0.945 | 0.921 / 0.952 / 0.970 | 0.898 / 0.928 / 0.945 |
+| MetaQA | 0.863 / 0.950 / 0.965 | 0.945 / 0.965 / 0.970 | 0.919 / 0.940 / 0.960 |
+| WebQSP | 0.578 / 0.694 / 0.735 | 0.713 / 0.777 / 0.810 | 0.615 / 0.691 / 0.755 |
+
+- **GRPO from the base takes Mimir from 0.198 to 0.542 with no labels beyond the reward**, but stays 0.10 below both
+  SFT arms' best (E1 0.642, E3 0.639). It matches E1 on KGQA from retrieved subgraphs (KQA Pro retrieved 0.498, MetaQA
+  retrieved 0.724) and on the held-out CLUTRR (0.193), and is within 0.05 of E1 on CWQ.
+- **It cannot learn what the base never gets right.** CLRS: 0.003 → 0.097 (E1 0.725). With dynamic sampling, a group of
+  8 rollouts with constant reward is discarded, so prompts the base always fails give no gradient. 8 of the 12 CLRS
+  algorithms stay at 0.00-0.01 (bfs, dfs, bellman_ford, dijkstra, bridges, mst_kruskal, topological_sort, SCC); only
+  articulation_points (0.39) and dag_shortest_paths (0.23) moved. pass@16 on CLRS val is 0.125: no headroom to exploit.
+- **It learns short answers, not traces.** Median generation: 14-90 characters on KGQA, CLUTRR and CLRS (E2 / E3:
+  240-1,300); only GraphQA keeps reasoning (257). Tasks that need a worked trace stay low: TriangleCounting 0.46 (E3
+  0.74), DisconnectedNodes 0.23 (0.70), EdgeCount 0.65 (0.90).
+- **CycleCheck scoring is an answer-format artefact for every model not trained on GraphQA's answer strings.** The
+  gold is "Yes, there is a cycle"; E0, E3b and the E4 SFT control answer "Yes" / "yes." and score 0.00 on all 205 rows.
+  On yes/no agreement they are right 0.93 (E0), 0.99 (E3b), 0.92 (E4 SFT control), E2 0.98. Not rescored: the reported
+  GraphQA numbers of E0, E3b, the E4 control, GLM and the zero-shot baselines are understated by up to ~0.09 on
+  GraphQA (205 of 2,324 rows), ~0.012 macro. E3b never learned the format because an all-zero group gives no gradient.
+- **Anonymised:** E3b 0.744 (CWQ 0.450, KQA Pro 0.925, MetaQA 0.858), level with E2 (0.750), below E1 / E3.
+
+### Findings of the benchmark so far (E0-E4, one seed, differences under ~0.02 are noise)
+
+1. **Answer-only SFT (E1) is the best single recipe**: macro 0.642 named / 0.814 anon. No arm with CLUTRR held out beats it; E3 ties
+   it (0.639 / 0.806) after trace SFT plus 200 GRPO steps, far more compute. (The E4 SFT control reaches 0.661, but it
+   trained on CLUTRR.)
+2. **Mimir v1.5 is the best model after the same SFT**, ahead of Qwen2.5-7B, OLMo-3-7B and Qwen3.5-4B (0.642 vs
+   0.589 / 0.577 / 0.590), and the lead holds with entities anonymised.
+3. **Trace SFT (E2) helps algorithmic tasks and hurts the rest**, in all four models: GraphQA up (Mimir 0.858 → 0.960),
+   macro down 0.04-0.06, CLUTRR transfer broken for the baselines (0.25 → 0.00-0.03).
+4. **GRPO after trace SFT (E3) repairs the cost of the traces** (+0.056 macro, most on CLRS, CWQ, CLRS OOD) and
+   raises pass@1 far more than pass@16: it makes the model reliable on what it could already sometimes do.
+5. **GRPO from the base (E3b) works on tasks the base can sometimes solve and fails on the rest** (0.542; CLRS 0.097).
+   SFT is needed to open tasks with zero initial success; RL then sharpens them. Order matters: E3 > E3b by 0.10.
+6. **Adapting to a new task with answers only (E4): SFT beats GRPO by a wide margin on the task** (CLUTRR 0.916 vs
+   0.281, 4 minutes vs 19 hours), but SFT switches the model to direct answers and loses the trace-dependent tasks
+   (CLRS test 0.641 → 0.444, GraphQA large 0.800 → 0.497), while GRPO changes nothing else. Not a matched comparison
+   (questions seen: 12,064 vs 1,600).
+7. **GRPO collapses exploration**: after E4, CLUTRR pass@16 0.390 vs pass@1 0.343; after E3, pass@16 barely moved.
+8. **Zero-shot transfer to OSM spatial QA is weak for every small model** (best: E3 0.100, base 0.003), while GLM-5.3
+   reaches 0.736 / 0.857: see [OSM KGQA](/pages/hrm-graph/osm-spatial-kgqa.md#zero-shot-results-all-models-2026-11-10).
+9. **GLM-5.3 zero-shot (0.459 at 3k tokens, 0.572 at 16k) is below fine-tuned Mimir** on the named macro, mostly
+   because 27-40% of its rows run out of budget while thinking; on finished rows it is right 0.75.
+10. **Scoring caveats:** exact answer strings penalise untuned models (CycleCheck above); budget cut-offs count as
+    errors; every number is one seed on up to 1,000 rows per file.
+
+Open: E3b OSM eval not run; GRPO from E1 not run; no second seed.
