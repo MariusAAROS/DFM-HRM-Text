@@ -46,9 +46,11 @@ def build_rows(inputs: list[str], cap: int | None, seed: int, count_tokens=None,
     rng = random.Random(seed)
     rows, stats = [], Counter()
     for path in inputs:
+        path, _, own_cap = path.partition("@")  # "file.jsonl@N": this file's own cap
+        file_cap = int(own_cap) if own_cap else cap
         recs = read_records(path)
-        if cap is not None and len(recs) > cap:
-            recs = rng.sample(recs, cap)
+        if file_cap is not None and len(recs) > file_cap:
+            recs = rng.sample(recs, file_cap)
         for rec in recs:
             content = user_message(rec)
             if max_tokens is not None and count_tokens(content) > max_tokens:
@@ -66,9 +68,9 @@ def build_rows(inputs: list[str], cap: int | None, seed: int, count_tokens=None,
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("inputs", nargs="+")
+    ap.add_argument("inputs", nargs="+", help="Bench JSONL files; \"file.jsonl@N\" caps that file at N records.")
     ap.add_argument("--out", required=True)
-    ap.add_argument("--cap", type=int, default=None, help="Max records per input file.")
+    ap.add_argument("--cap", type=int, default=None, help="Max records per input file without its own @N.")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--tokenizer", default=None, help="HF tokenizer for --max-prompt-tokens.")
     ap.add_argument("--max-prompt-tokens", type=int, default=None)

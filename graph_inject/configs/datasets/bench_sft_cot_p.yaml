@@ -1,0 +1,13 @@
+# graph_bench E2p (wiki: mimir-graph-trace-sft-analysis): E2c (bench_sft_cot_c) + the 523 WebQSP train questions that have
+# no trace but all their answers in the prompt, with the answer line as target (export_hrm --answerable-untraced): traces
+# where one exists, a direct answer where none does. Same questions as E1p (bench_sft_answer_p).
+# Built by graph_bench/build_sft_v2.sh. Train only (eval.native=false); epoch = last, evaluated with vLLM.
+dataset: bench_sft_cot_p
+epochs: 3
+eval: {native: false, max_seq_len: 4096}
+data:
+  train: data/graphs/bench/sft/train_cot_p.jsonl
+  val: null
+  test: null
+out_root: /work/dfm/marius-ortega/dfm-hrm-graphs/mimir_bench/sft_cot_p
+wandb: {project: Mimir-Graph-RLVR, group: mimir-bench-sft}

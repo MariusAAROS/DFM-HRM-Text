@@ -170,7 +170,10 @@ bash scripts/graphs/run_graphqa_scaled.sh
 - Plain `python pretrain.py` runs fp32 on CUDA (no FSDP mixed precision without a process group) and fails in
   the FA2 kernel. Use `torchrun --nproc_per_node=1`.
 - Log every run to W&B: `all_config.yaml` and `train_metadata.yaml`, which eval needs, are only written with a
-  W&B run. Logged in as `m-ortega` (entity `m-ortega-p-le-l-onard-de-vinci`, default host `api.wandb.ai`; the old `forge.coreweave.com` links are the same backend, so set no `WANDB_BASE_URL`).
+  W&B run. Logged in as `m-ortega` (entity `m-ortega-p-le-l-onard-de-vinci`). The W&B host is `https://api.forge.coreweave.com` (run links: `app.forge.coreweave.com`).
+  The default host depends on the wandb version (checked 2026-11-16): `.venv` (wandb 0.31.0) already defaults to it, so set no `WANDB_BASE_URL` there;
+  `/home/ucloud/miniforge3/bin/python` (wandb 0.30.0: `eval_vllm`, VeRL / GRPO) defaults to `api.wandb.ai`, where the login fails with 401, so queues
+  that use it must `export WANDB_BASE_URL=https://api.forge.coreweave.com` (as `graph_bench/rl/run_e5.sh` and `graph_bench/run_sft_v2.sh` do).
   Use `WANDB_MODE=offline` only without network, and never `disabled`.
 - Queue roots default to `/work/dfm/marius-ortega/dfm-hrm-graphs/<experiment>`. Old FlexAttention results stay
   in `/work/dfm/marius-ortega/<experiment>`. Pointing a queue there would skip runs as "already trained".

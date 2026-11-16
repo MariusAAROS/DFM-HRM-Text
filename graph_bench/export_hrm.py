@@ -14,7 +14,12 @@ Traces go in the plain response, not in Mimir's thought channel: the Gemma templ
   --prompt instruct  the RL / zero-shot user message (export_verl.user_message: reason, then an "Answer:" line), so SFT,
                      E0 eval (eval_vllm --style instruct) and GRPO share one prompt
   --traced-only      drop records without a trace for every target (E1 and E2 then train on the same questions)
+  --collapse-repeats cot target: consecutive equal "State k:" lines of a trace are merged (CLRS; E2c / E2p)
+  --answerable-untraced  records without a trace whose answers are all in the prompt are kept, with the answer line
+                     as target, also under --target cot / --traced-only (WebQSP; E1p / E2p)
   --extra FILE       data_io rows added as they are (general-instruction replay, export_replay.py), shuffled in
+  --ids-from PARQUET keep only the records of a VeRL parquet (export_verl; extra_info.id), so an SFT control trains on
+                     the questions of a GRPO arm
 
 Several inputs can be mixed into one file (the SFT train mixture), each capped with --cap and shuffled with --seed:
     .venv/bin/python -m graph_bench.export_hrm --target cot --cap 20000 --seed 0 \\
@@ -31,22 +36,35 @@ from graph_bench.export_verl import user_message
 from graph_bench.schema import GRL_PREFIX, cot_response, direct_response, prompt_text, read_records
 
 
-def to_row(rec, target: str, prompt: str = "grl", traced_only: bool = False) -> dict | None:
-    if (target == "cot" or traced_only) and not rec.trace:
+def answerable_untraced(rec) -> bool:
+    """A record without a trace whose gold answers are all in its prompt (WebQSP / CWQ meta, sources/rog.py): the
+    question has no relation path that gives exactly the gold set, but the answer can be read off the facts."""
+    n = rec.meta.get("n_answers")
+    return not rec.trace and n is not None and rec.meta.get("answers_in_prompt") == n
+
+
+def to_row(rec, target: str, prompt: str = "grl", traced_only: bool = False, collapse: bool = False,
+           keep_answerable: bool = False) -> dict | None:
+    fallback = keep_answerable and answerable_untraced(rec)  # kept, with the answer line as its target
+    if (target == "cot" or traced_only) and not rec.trace and not fallback:
         return None
-    response = {"cot": cot_response, "direct": direct_response,
-                "answer": lambda r: f"Answer: {direct_response(r)}"}[target](rec)
+    response = {"cot": lambda r: cot_response(r, collapse), "direct": direct_response,
+                "answer": lambda r: f"Answer: {direct_response(r)}"}["answer" if fallback and target == "cot"
+                                                                     else target](rec)
     instruction = user_message(rec) if prompt == "instruct" else GRL_PREFIX + prompt_text(rec)
     return {"instruction": instruction, "response": response, "condition": "direct", "task": rec.task,
             "dataset": rec.dataset}
 
 
 def export(inputs: list[str], out: str, target: str, anonymized: bool = False, cap: int | None = None,
-           seed: int = 0, prompt: str = "grl", traced_only: bool = False, extra: list[str] = ()) -> Counter:
+           seed: int = 0, prompt: str = "grl", traced_only: bool = False, extra: list[str] = (),
+           ids: set[str] | None = None, collapse: bool = False, keep_answerable: bool = False) -> Counter:
     rng = random.Random(seed)
     stats, rows = Counter(), []
     for path in inputs:
         recs = read_records(path)
+        if ids is not None:
+            recs = [r for r in recs if r.id in ids]
         if cap is not None and len(recs) > cap:
             recs = rng.sample(recs, cap)
         for rec in recs:
@@ -55,10 +73,12 @@ def export(inputs: list[str], out: str, target: str, anonymized: bool = False, c
                 if not grounded:
                     stats["dropped_ungrounded"] += 1
                     continue
-            row = to_row(rec, target, prompt, traced_only)
+            row = to_row(rec, target, prompt, traced_only, collapse, keep_answerable)
             if row is None:
                 stats["dropped_no_trace"] += 1
                 continue
+            if keep_answerable and answerable_untraced(rec):
+                stats["answerable_untraced"] += 1
             rows.append(row)
             stats[rec.dataset] += 1
     for path in extra:
@@ -83,13 +103,23 @@ def main():
     ap.add_argument("--target", choices=["direct", "cot", "answer"], default="direct")
     ap.add_argument("--prompt", choices=["grl", "instruct"], default="grl")
     ap.add_argument("--traced-only", action="store_true")
+    ap.add_argument("--collapse-repeats", action="store_true",
+                    help="--target cot: merge consecutive equal 'State k:' trace lines (CLRS).")
+    ap.add_argument("--answerable-untraced", action="store_true",
+                    help="Keep records without a trace whose answers are all in the prompt, with the answer line as "
+                         "target (also under --target cot and --traced-only).")
     ap.add_argument("--extra", nargs="*", default=[], help="data_io JSONL rows to add as they are (replay).")
     ap.add_argument("--anonymize", action="store_true")
     ap.add_argument("--cap", type=int, default=None, help="Max records per input file (random subset).")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--ids-from", default=None, help="VeRL parquet: keep only its records (extra_info.id).")
     args = ap.parse_args()
+    ids = None
+    if args.ids_from:
+        import pyarrow.parquet as pq
+        ids = {e["id"] for e in pq.read_table(args.ids_from, columns=["extra_info"]).column("extra_info").to_pylist()}
     stats = export(args.inputs, args.out, args.target, args.anonymize, args.cap, args.seed, args.prompt,
-                   args.traced_only, args.extra)
+                   args.traced_only, args.extra, ids, args.collapse_repeats, args.answerable_untraced)
     print(f"{args.out}: {dict(stats)}")
 
 

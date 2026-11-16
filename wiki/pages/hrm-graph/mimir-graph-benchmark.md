@@ -46,6 +46,7 @@ training, GRPO queued after it. Results and run log: [Results](/pages/hrm-graph/
 | E0 zero-shot matrix | Running since 2026-11-03 16:10 (8 cached models, see [Launch](#launch-of-e0e4-2026-11-03)) |
 | E1 / E2 SFT | Queued (data built; trains when the GPU lock frees) |
 | E3 / E4 / E3b RL | Queued; start when E2's merged model exists |
+| E5 (added 2026-11-13) | RL from E3 on datasets never trained on (OSM, CLUTRR, CWQ) + SFT control: [E5 page](/pages/hrm-graph/mimir-graph-e5-multidataset-rl.md) |
 | Not covered yet | Ouro (needs its own vLLM venv), IFM and Qwen3-4B / HRM-Text-1B-v3.2 (not downloaded), Tier 2 sets, retention suite (H4), eval of the RL checkpoints |
 
 ## Design (2026-11-02)

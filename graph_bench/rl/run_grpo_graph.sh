@@ -46,6 +46,9 @@ PPO_MICRO_BATCH_PER_GPU=${PPO_MICRO_BATCH_PER_GPU:-4}
 LOGPROB_MICRO_BATCH_PER_GPU=${LOGPROB_MICRO_BATCH_PER_GPU:-4}
 CLIP_HIGH=${CLIP_HIGH:-0.28}                 # DAPO clip-higher
 FILTER_GROUPS=${FILTER_GROUPS:-True}         # DAPO dynamic sampling: drop all-correct / all-wrong groups
+# What "constant" is measured on: acc (E3 / E3b / E4), or score = the reward itself. With GRAPH_REWARD=f1 use score,
+# or a group whose set-F1 varies while its acc is all 0 would be dropped (E5).
+FILTER_METRIC=${FILTER_METRIC:-acc}
 GPU_MEM=${GPU_MEM:-0.4}
 ENFORCE_EAGER=${ENFORCE_EAGER:-True}         # Jacob's working value; try False (CUDA graphs) in the gate
 SAVE_FREQ=${SAVE_FREQ:-50}
@@ -64,7 +67,7 @@ RAY_CPUS=${RAY_CPUS:-16}
 export RAY_agent_register_timeout_ms=${RAY_agent_register_timeout_ms:-300000}
 export RAY_raylet_start_wait_time_s=${RAY_raylet_start_wait_time_s:-300}
 
-echo "[grpo_graph] model=$MODEL_PATH prefill=$GRAPH_RL_PREFILL reward=$GRAPH_REWARD ref_kl=$REF_KL kl_coef=$KL_COEF train=$TRAIN_FILE"
+echo "[grpo_graph] model=$MODEL_PATH prefill=$GRAPH_RL_PREFILL reward=$GRAPH_REWARD filter_metric=$FILTER_METRIC ref_kl=$REF_KL kl_coef=$KL_COEF train=$TRAIN_FILE"
 echo "[grpo_graph] container memory at start: $(( $(cat /sys/fs/cgroup/memory.current) / 1000000000 )) GB of $(( $(cat /sys/fs/cgroup/memory.max) / 1000000000 )) GB"
 
 cd "$REPO"
@@ -72,7 +75,7 @@ cd "$REPO"
   algorithm.adv_estimator=grpo \
   algorithm.use_kl_in_reward=False \
   algorithm.filter_groups.enable=${FILTER_GROUPS} \
-  algorithm.filter_groups.metric=acc \
+  algorithm.filter_groups.metric=${FILTER_METRIC} \
   algorithm.filter_groups.max_num_gen_batches=4 \
   data.train_files=${TRAIN_FILE} \
   data.val_files=${TEST_FILE} \

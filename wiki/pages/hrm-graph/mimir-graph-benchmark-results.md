@@ -4,7 +4,7 @@ title: Mimir v1.5 Graph Benchmark - Results and Run Log
 description: "Results and run log of the Mimir v1.5 graph benchmark from 2026-11-03: E0 zero-shot matrix (7 models), E1/E2 LoRA SFT for Mimir v1.5, Qwen2.5-7B and OLMo-3-7B, the generation-cap artefact on trace-trained models, pass@16 headroom for GRPO, E3 GRPO test results, the GLM-5.3 zero-shot frontier reference, and the failures and protocol changes made on the way (memory guard, eval split keys, GRPO response length)."
 tags: [graphs, mimir, benchmark, sft, lora, grpo, kgqa, clrs, clutrr, qwen, olmo]
 status: draft
-last_updated: 2026-11-13
+last_updated: 2026-11-16
 confidence: medium
 ---
 # Mimir v1.5 Graph Benchmark - Results and Run Log
@@ -564,3 +564,9 @@ Val pass@1 / pass@4 / pass@16 (200 questions per dataset, 16 samples, temperatur
     errors; every number is one seed on up to 1,000 rows per file.
 
 Open: E3b OSM eval not run; GRPO from E1 not run; no second seed.
+
+Follow-up (2026-11-13): E5 trains E3 further on OSM, CLUTRR and CWQ, with GRPO and an SFT control:
+[E5](/pages/hrm-graph/mimir-graph-e5-multidataset-rl.md).
+
+Follow-up (2026-11-16): why E2 is below E1, row by row (findings 1, 3 and 4 hold only for the pooled test sets):
+[trace SFT analysis](/pages/hrm-graph/mimir-graph-trace-sft-analysis.md).

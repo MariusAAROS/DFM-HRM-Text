@@ -14,6 +14,7 @@ answer_format decides how a prediction is compared (scoring.py):
   checker  any answer that the named checker accepts (checkers.py); answers[0] is one reference solution
 """
 import json
+import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -94,11 +95,35 @@ def direct_response(rec: Record) -> str:
     return f"{answer_text(rec)}."
 
 
-def cot_response(rec: Record) -> str:
-    """Trace lines, then "Answer: <answer>." (the graphqa_v2_cot convention; scoring reads only the last answer)."""
+_STATE_LINE = re.compile(r"^State \d+: (.*)$", re.S)
+
+
+def collapse_repeated_states(lines: list[str]) -> list[str]:
+    """Drop every "State k: X" line whose X equals the previous state's, and renumber the states from 1.
+
+    CLRS traces print the output array at every algorithm step, and for some algorithms it stays unchanged for most
+    of them (strongly_connected_components: median 59 states, 3.8 distinct). A model trained on these lines learns to
+    repeat one and loses count (wiki: mimir-graph-trace-sft-analysis). Other lines are kept as they are."""
+    out, last, k = [], None, 0
+    for line in lines:
+        m = _STATE_LINE.match(line)
+        if not m:
+            out.append(line)
+            last = None
+        elif m.group(1) != last:
+            k += 1
+            last = m.group(1)
+            out.append(f"State {k}: {last}")
+    return out
+
+
+def cot_response(rec: Record, collapse: bool = False) -> str:
+    """Trace lines, then "Answer: <answer>." (the graphqa_v2_cot convention; scoring reads only the last answer).
+    collapse: the trace goes through collapse_repeated_states."""
     if not rec.trace:
         raise ValueError(f"{rec.id}: no trace")
-    return "\n".join(rec.trace) + f"\nAnswer: {direct_response(rec)}"
+    trace = collapse_repeated_states(rec.trace) if collapse else rec.trace
+    return "\n".join(trace) + f"\nAnswer: {direct_response(rec)}"
 
 
 def read_records(path: str | Path) -> list[Record]:

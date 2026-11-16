@@ -52,12 +52,17 @@ def source_name(path: str) -> str:
     return f"{p.parent.name}/{p.stem}"
 
 
-def load(paths: list[str], limit: int | None, anon: bool, seed: int):
+def load(paths: list[str], limit: int | None, anon: bool, seed: int, complement: bool = False):
+    """complement: the rows of each file that the same --limit / --seed call leaves out (none for a file with at most
+    `limit` rows), in file order: the test rows no report has scored (wiki: mimir-graph-trace-sft-analysis)."""
     recs, sources, dropped = [], [], 0
     for path in paths:
         rs = read_records(path)
         if limit is not None and len(rs) > limit:
-            rs = random.Random(seed).sample(rs, limit)
+            picked = random.Random(seed).sample(range(len(rs)), limit)  # the same rows as sample(rs, limit)
+            rs = [rs[i] for i in sorted(set(range(len(rs))) - set(picked))] if complement else [rs[i] for i in picked]
+        elif complement:
+            rs = []
         for r in rs:
             if anon:
                 r, grounded = anonymize(r)
@@ -113,6 +118,8 @@ def main():
     ap.add_argument("--kv-cache-dtype", default="auto")
     ap.add_argument("--dtype", default="bfloat16", help="float32 for numerics audits (parity gate referee).")
     ap.add_argument("--limit", type=int, default=None, help="Random subset per input file.")
+    ap.add_argument("--complement", action="store_true",
+                    help="With --limit: score the rows that --limit leaves out instead of the ones it picks.")
     ap.add_argument("--anonymize", action="store_true")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--pass-k", type=int, nargs="*", default=[1, 4, 16, 64])
@@ -122,7 +129,7 @@ def main():
 
     from vllm import LLM, SamplingParams
 
-    recs, sources, dropped = load(args.data, args.limit, args.anonymize, args.seed)
+    recs, sources, dropped = load(args.data, args.limit, args.anonymize, args.seed, args.complement)
     print(f"{len(recs)} records ({dropped} dropped: question lost its entity after anonymisation)")
     llm = LLM(model=args.model, dtype=args.dtype, max_model_len=args.max_model_len, seed=args.seed,
               gpu_memory_utilization=args.gpu_memory_utilization, enforce_eager=args.enforce_eager,
@@ -181,7 +188,8 @@ def main():
             f.write(json.dumps({**row, "gold": rec.answers, "preds": [s["pred"] for s in scores],
                                 "generations": texts, "prompt_tail": prompt[-300:]}, ensure_ascii=False) + "\n")
     report = {"model": args.model, "style": args.style, "prefill": args.prefill, "n": args.n,
-              "temperature": args.temperature, "anonymized": args.anonymize, "data": args.data,
+              "temperature": args.temperature, "anonymized": args.anonymize, "complement": args.complement,
+              "data": args.data,
               "max_tokens": args.max_tokens, "max_model_len": args.max_model_len, "enforce_eager": args.enforce_eager,
               "shortened": shortened, "skipped_no_room": sum(skipped),
               "summary": summarize(rows, args.pass_k)}

@@ -1,0 +1,13 @@
+# graph_bench E5 control (wiki: mimir-graph-e5-multidataset-rl): LoRA SFT from the merged E3 model
+# (model.hf_dir=<native import of it>) on the questions of E5's GRPO parquet: answer line for the new datasets (OSM,
+# CLUTRR, CWQ), trace + answer for the replayed old ones. Built by graph_bench/rl/build_e5_data.sh. Train only;
+# evaluated with vLLM.
+dataset: bench_e5_answer
+epochs: 1
+eval: {native: false, max_seq_len: 4096}
+data:
+  train: data/graphs/bench/sft/e5_answer.jsonl
+  val: null
+  test: null
+out_root: /work/dfm/marius-ortega/dfm-hrm-graphs/mimir_bench/sft_e5
+wandb: {project: Mimir-Graph-RLVR, group: mimir-bench-e5}

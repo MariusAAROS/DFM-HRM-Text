@@ -1,7 +1,8 @@
-"""OSM Paris spatial KGQA (data/osm/kgqa, wiki: osm-spatial-kgqa) -> bench records, for zero-shot transfer evals.
+"""OSM Paris spatial KGQA (data/osm/kgqa, wiki: osm-spatial-kgqa) -> bench records.
 
-Held-out downstream task (wiki: mimir-graph-benchmark): geospatial multi-hop questions over Paris POIs, a domain and
-relation vocabulary (distances, directions, streets, areas) that no train set of the benchmark covers. Never trained.
+Downstream task (wiki: mimir-graph-benchmark): geospatial multi-hop questions over Paris POIs, a domain and relation
+vocabulary (distances, directions, streets, areas) that no train set of E0-E4 covers: those arms never train on it, so
+their val / test scores are zero-shot transfer. E5 (wiki: mimir-graph-e5-multidataset-rl) trains on the train split.
 
 The source rows already hold the GRL prompt ("#### Question\\n<preamble>\\nThe facts are:\\n...\\nQ: <q>\\nA: "). The
 graph block is kept verbatim as `context` (so prompt_text reproduces the source prompt exactly, checked per row), not
@@ -22,7 +23,7 @@ from graph_bench.schema import GRL_PREFIX, Record, prompt_text, write_records
 REPO = Path(__file__).resolve().parents[2]
 SRC = REPO / "data/osm/kgqa"
 OUT = REPO / "data/graphs/bench/osm"
-SPLITS = ("val", "test")
+SPLITS = ("train", "val", "test")
 
 sys.path.insert(0, str(REPO / "scripts/osm"))
 from check_kgqa import solve_from_prompt  # noqa: E402

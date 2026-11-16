@@ -115,6 +115,30 @@ def test_rendering():
     assert direct_response(s) == "b | a."
 
 
+def test_collapse_repeated_states():
+    from graph_bench.schema import collapse_repeated_states
+    trace = ["State 1: [0 1 2]", "State 2: [0 1 2]", "State 3: [0 0 2]", "State 4: [0 0 2]", "State 5: [0 1 2]"]
+    assert collapse_repeated_states(trace) == ["State 1: [0 1 2]", "State 2: [0 0 2]", "State 3: [0 1 2]"]
+    assert collapse_repeated_states(["Hop 1: a", "Hop 1: a"]) == ["Hop 1: a", "Hop 1: a"]  # only state lines
+    rec = _rec(trace=trace[:3])
+    assert cot_response(rec, collapse=True) == "State 1: [0 1 2]\nState 2: [0 0 2]\nAnswer: Bob."
+    assert cot_response(rec).count("State") == 3
+
+
+def test_export_answerable_untraced():
+    from graph_bench.export_hrm import to_row
+    traced = _rec(trace=["State 1: x", "State 1: x"])
+    full = _rec(meta={"answers_in_prompt": 2, "n_answers": 2})
+    partial = _rec(meta={"answers_in_prompt": 1, "n_answers": 2})
+    for target in ("cot", "answer"):
+        assert to_row(full, target, "instruct", traced_only=True) is None
+        assert to_row(partial, target, "instruct", traced_only=True, keep_answerable=True) is None
+        assert to_row(_rec(), target, "instruct", traced_only=True, keep_answerable=True) is None  # no meta
+        assert to_row(full, target, "instruct", traced_only=True, keep_answerable=True)["response"] == "Answer: Bob."
+    assert to_row(traced, "cot", keep_answerable=True)["response"].startswith("State 1: x\nState 1: x\nAnswer:")
+    assert to_row(traced, "cot", collapse=True)["response"] == "State 1: x\nAnswer: Bob."
+
+
 def test_anonymize():
     rec = _rec(trace=["(Film A, directed by, Bob) gives Bob."])
     anon, grounded = anonymize(rec)

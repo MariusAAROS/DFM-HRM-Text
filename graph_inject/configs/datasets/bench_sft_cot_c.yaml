@@ -1,0 +1,12 @@
+# graph_bench E2c (wiki: mimir-graph-trace-sft-analysis): E2 (bench_sft_cot) with one change: consecutive equal states of
+# the CLRS traces are merged (export_hrm --collapse-repeats). Same 17,916 questions, prompt and replay rows as E2.
+# Built by graph_bench/build_sft_v2.sh. Train only (eval.native=false); epoch = last, evaluated with vLLM.
+dataset: bench_sft_cot_c
+epochs: 3
+eval: {native: false, max_seq_len: 4096}
+data:
+  train: data/graphs/bench/sft/train_cot_c.jsonl
+  val: null
+  test: null
+out_root: /work/dfm/marius-ortega/dfm-hrm-graphs/mimir_bench/sft_cot_c
+wandb: {project: Mimir-Graph-RLVR, group: mimir-bench-sft}
