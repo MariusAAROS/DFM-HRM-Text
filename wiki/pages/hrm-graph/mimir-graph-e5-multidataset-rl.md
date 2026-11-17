@@ -138,12 +138,12 @@ them with a reward only); GRPO's reward change (F1) is confounded with the new d
 CWQ questions are built from WebQSP questions across WebQSP's split. 928 of the 2,979 CWQ rows in
 `verl_e5/train.parquet`, which the SFT control trains on, extend a WebQSP test question (465 of the 1,628). Read the
 control's WebQSP test score with that in mind; the GRPO arm left CWQ out and is not affected. Audit:
-[train / val / test audit](/pages/hrm-graph/mimir-graph-trace-sft-analysis.md#train--val--test-audit-2026-11-16).
+[train / val / test audit](/pages/hrm-graph/mimir-graph-trace-sft-analysis.md#3-can-the-splits-be-trusted-train--val--test-audit-2026-11-16).
 
 ## GRPO stopped at step 152 (2026-11-16)
 
 Stopped on the user's decision (16:18) to free the GPU for the trace-SFT relaunch
-([design](/pages/hrm-graph/mimir-graph-trace-sft-analysis.md#relaunch-design-and-launch-2026-11-16)). The queue and
+([design](/pages/hrm-graph/mimir-graph-trace-sft-analysis.md#5-the-models-2026-11-16)). The queue and
 the trainer were killed between two checkpoints.
 
 - **Last checkpoint: step 150** (`mimir_bench/e5_grpo_multi/ckpt/global_step_150`, saved 15:36): same files and sizes as

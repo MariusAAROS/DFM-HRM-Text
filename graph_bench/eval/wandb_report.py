@@ -26,10 +26,11 @@ NOT_SUPERSEDED = "Tags() not in ['superseded']"
 
 # One colour per model (arm), the same in every section. Old arms in greys / muted, the relaunch in strong colours.
 COLORS = {"e0": "#bdbdbd", "e1": "#1f77b4", "e1p": "#6baed6", "e2": "#ff7f0e", "e2c": "#d62728", "e2p": "#e377c2",
-          "e3": "#2ca02c", "e3b": "#98df8a", "e3c": "#006d2c", "e4": "#9467bd", "e4sft": "#c5b0d5", "e5": "#8c564b",
+          "e3": "#2ca02c", "e3b": "#98df8a", "e3c": "#006d2c", "e3e1": "#17becf", "e4": "#9467bd", "e4sft": "#c5b0d5", "e5": "#8c564b",
           "e5sft": "#c49c94"}
 BASELINE_COLORS = {"mimir15": "#1f77b4", "qwen25_7b": "#ff7f0e", "olmo3_7b": "#2ca02c", "qwen35_4b": "#9467bd"}
-GRPO_COLORS = {"e3_grpo_e2": "#2ca02c", "e3b_grpo_base": "#98df8a", "e4_grpo_clutrr": "#9467bd",
+GRPO_COLORS = {"e3_grpo_e2": "#2ca02c", "e3c_grpo_e2c": "#006d2c", "e3c_grpo_e2p": "#006d2c",
+               "e3_grpo_e1": "#17becf", "e3b_grpo_base": "#98df8a", "e4_grpo_clutrr": "#9467bd",
                "e5_grpo_multi": "#8c564b"}
 
 
@@ -83,7 +84,8 @@ def build() -> list:
                   f"Config('model_name') in {list(BASELINE_COLORS)} and Config('arm') in ['e0', 'e1', 'e2'] "
                   f"and Config('condition') in ['named', 'named_t3k'] and {NOT_SUPERSEDED}")
     grpo = wr.Runset(entity=ENTITY, project=PROJECT, name="GRPO training runs",
-                     filters="Name in ['e3_grpo_e2', 'e3b_grpo_base', 'e4_grpo_clutrr', 'e5_grpo_multi']")
+                     filters="Name in ['e3_grpo_e2', 'e3b_grpo_base', 'e4_grpo_clutrr', 'e5_grpo_multi', "
+                             "'e3c_grpo_e2c', 'e3c_grpo_e2p', 'e3_grpo_e1']")
 
     acc = lambda f: f"split/{f}/acc"  # noqa: E731
     p = wr.P
@@ -91,7 +93,8 @@ def build() -> list:
         wr.TableOfContents(),
         p("How to read: one bar = one model, one colour per model in every chart (e0 base model, e1 answer-only SFT, "
           "e1p e1 + 523 WebQSP questions without a path, e2 trace SFT, e2c e2 with clean CLRS traces, e2p e2c + the 523 "
-          "questions, e3 GRPO from e2, e3b GRPO from the base, e3c GRPO from the better of e2c / e2p, e4 / e5 CLUTRR / "
+          "questions, e3 GRPO from e2, e3b GRPO from the base, e3c GRPO from the better of e2c / e2p, e3e1 GRPO from e1, "
+          "e4 / e5 CLUTRR / "
           "new-dataset adaptations). Accuracy from 0 to 1, one seed: differences under 0.02 are noise. Test charts and "
           "val charts never share a panel. e5sft trained on CWQ questions built from WebQSP test questions: its "
           "WebQSP test score is not trustworthy. The breakdown by question type (gold path in the facts or not) is not on "
