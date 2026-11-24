@@ -4,7 +4,7 @@ title: Mimir Graph Benchmark - Traces or Direct Answers? Diagnosis, Relaunch and
 description: "Does training Mimir v1.5 to write step-by-step traces beat training it to answer directly, once both get the same RL? The page follows the reasoning in order: why trace SFT (E2) scored below answer-only SFT (E1), whether the train / val / test splits can be trusted, what was fixed and why, the relaunched models (E1p, E2c, E2p, E3c, E3e1), the comparison steps and the decision rules fixed before the results, and the results so far."
 tags: [graphs, mimir, benchmark, sft, cot, traces, grpo, kgqa, clrs, webqsp, cwq, metaqa, kqapro, leakage]
 status: draft
-last_updated: 2026-11-17
+last_updated: 2026-11-24
 confidence: medium
 ---
 # Mimir Graph Benchmark - Traces or Direct Answers? Diagnosis, Relaunch and Comparison Plan
@@ -20,6 +20,9 @@ this work does not fix (8). Sections carry the date of the work.
 
 **Status (2026-11-17):** the SFT models are done (steps 1-3 answered). E3c's GRPO is running; E3e1 is queued after it
 (steps 4-6 pending, results expected ~2026-11-19 and ~2026-11-21).
+**Status (2026-11-24):** all steps answered (section 7, "GRPO models"). Answer-only SFT + GRPO (E3e1) is the better recipe;
+traces pay only on GraphQA. Mimir vs the baselines, re-run with an LR sweep and 3 seeds:
+[Mimir vs the Baselines](/pages/hrm-graph/mimir-graph-vs-baselines.md).
 
 - Analysis code: [`graph_bench/eval/trace_gap_breakdown.py`](../../../graph_bench/eval/trace_gap_breakdown.py)
   (`--names E1,E2,...` then the models' `.samples.jsonl` files, the answer-only model first).
@@ -349,11 +352,36 @@ gap from 0.059 to 0.026, larger than the 0.008 observed between E1 and E1p. Rema
 - **What this implies for steps 4-5:** the traces' value can only show after RL (GRPO took E2 0.583 → 0.639; E3c
   starts 0.033 higher). E1 has as much sampling headroom as E2, so E3e1 may well match or beat E3c.
 
-### Pending
+### Pending (superseded 2026-11-24: both runs finished, see the next section)
 
 - **E3c** (GRPO from E2c): started 2026-11-17 03:16, W&B run `42xn080v`, ~14 min/step; training expected to end
   ~2026-11-19 02:30, its evaluations and the never-scored evaluations of E1 / E2 / E3 ~2026-11-19 09:00.
 - **E3e1** (GRPO from E1): starts after that, expected ~2026-11-21.
+
+### GRPO models: steps 4-6 (2026-11-21..23)
+
+Same GRPO for all three (VeRL, 200 steps, 16 × 8 rollouts, accuracy reward), one seed each. Analysis and figures:
+`notebooks/mimir_rlvr_v2.ipynb`; CIs are a paired bootstrap over the test rows, stratified by dataset.
+
+| Model | Macro test | Macro anon | KGQA path in facts | GraphQA | CLRS | Never-scored rows | GRPO cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| E1 (no RL) | 0.642 | 0.814 | 0.928 | 0.804 | 0.482 | 0.772 | |
+| E3 (from E2) | 0.639 | 0.806 | 0.920 | 0.904 | 0.483 | 0.797 | |
+| E3c (from E2c) | 0.650 | 0.810 | 0.924 | 0.904 | 0.532 | 0.809 | 55 GPU h, answers ~380-580 tokens |
+| **E3e1 (from E1)** | **0.662** | **0.822** | **0.935** | 0.825 | **0.586** | **0.824** | 27 GPU h, answers ~22-38 tokens |
+
+- **Step 4 - E3c is better than E3, on CLRS only.** +0.011 macro (95% CI +0.006 to +0.017). CLRS repeated-line
+  algorithms on larger graphs 0.180 → 0.453 (target met); KGQA "no path, answers in facts" unchanged (0.734 → 0.731).
+- **Step 5 - answer-only SFT + RL is the better recipe on this benchmark.** E3e1 − E3c = +0.012 macro (CI +0.006 to
+  +0.018), and E3e1 is ahead on "path in facts" (0.935 vs 0.924): the first rule applies. Traces win only on GraphQA
+  (0.904 vs 0.825). RL adds over answer-only SFT: E3e1 − E1 = +0.020, E3e1 − E1p = +0.012.
+- **Step 6 - confirmed on never-scored rows:** E3e1 0.824 > E3c 0.809 > E3 0.797 > E1 0.772, the same order. On these
+  fewer rows the E3e1 − E3c and E3c − E3 intervals include 0.
+- **Headroom left (val):** E3e1's pass@16 − pass@1 is 0.046 (E1 0.101), and its pass@16 is below E1's (0.896 vs 0.904):
+  GRPO turned half of E1's sampling headroom into greedy accuracy and narrowed its sampling. E3c keeps 0.035.
+- E3e1's looping lists are not new (E1 1.0% of rows, E3e1 0.9%).
+- **Caveats:** one seed per GRPO model. E3e1 is the best of 8 Mimir variants, picked after seeing test scores, so it is
+  not the basis of the comparison with the baselines.
 
 ## 8. What this work does not fix
 
@@ -364,6 +392,8 @@ gap from 0.059 to 0.026, larger than the 0.008 observed between E1 and E1p. Rema
   ([results](/pages/hrm-graph/mimir-graph-benchmark-results.md#e3b-grpo-from-base-mimir-and-the-benchmarks-findings-2026-11-13)).
 - **The WebQSP trace format** behind the copy loops.
 - **Baselines**: not retrained, so "Mimir is the best model after the same SFT" rests on E1 and the old E2 data.
+  Superseded (2026-11-24): with a tuned LR and 3 seeds, Qwen3.5-4B E1 ties Mimir E1 (0.643 vs 0.644); see
+  [Mimir vs the Baselines](/pages/hrm-graph/mimir-graph-vs-baselines.md).
 - **One seed** for every model.
 
 ## Change log
@@ -372,3 +402,4 @@ gap from 0.059 to 0.026, larger than the 0.008 observed between E1 and E1p. Rema
 - 2026-11-17: SFT results added, then the page reorganised on request into diagnosis → decisions → models →
   comparison steps → results, with the decision rules gathered in section 6. No number changed. Superseded claim kept
   and marked in section 4 (GRPO from E1).
+- 2026-11-24: steps 4-6 results (E3c, E3e1, never-scored rows) added in section 7; status line and section 8 updated.

@@ -4,7 +4,7 @@ title: Mimir v1.5 Graph Benchmark - Results and Run Log
 description: "Results and run log of the Mimir v1.5 graph benchmark from 2026-11-03: E0 zero-shot matrix (7 models), E1/E2 LoRA SFT for Mimir v1.5, Qwen2.5-7B and OLMo-3-7B, the generation-cap artefact on trace-trained models, pass@16 headroom for GRPO, E3 GRPO test results, the GLM-5.3 zero-shot frontier reference, and the failures and protocol changes made on the way (memory guard, eval split keys, GRPO response length)."
 tags: [graphs, mimir, benchmark, sft, lora, grpo, kgqa, clrs, clutrr, qwen, olmo]
 status: draft
-last_updated: 2026-11-16
+last_updated: 2026-11-24
 confidence: medium
 ---
 # Mimir v1.5 Graph Benchmark - Results and Run Log
@@ -545,6 +545,9 @@ Val pass@1 / pass@4 / pass@16 (200 questions per dataset, 16 samples, temperatur
    trained on CLUTRR.)
 2. **Mimir v1.5 is the best model after the same SFT**, ahead of Qwen2.5-7B, OLMo-3-7B and Qwen3.5-4B (0.642 vs
    0.589 / 0.577 / 0.590), and the lead holds with entities anonymised.
+   Superseded (2026-11-24): the baselines ran at an untuned LR. Qwen3.5-4B at its val-chosen LR ties Mimir E1 over
+   3 seeds (0.643 vs 0.644); Mimir keeps the lead on the anonymised sets (+0.063). See
+   [Mimir vs the Baselines](/pages/hrm-graph/mimir-graph-vs-baselines.md).
 3. **Trace SFT (E2) helps algorithmic tasks and hurts the rest**, in all four models: GraphQA up (Mimir 0.858 → 0.960),
    macro down 0.04-0.06, CLUTRR transfer broken for the baselines (0.25 → 0.00-0.03).
 4. **GRPO after trace SFT (E3) repairs the cost of the traces** (+0.056 macro, most on CLRS, CWQ, CLRS OOD) and
@@ -560,6 +563,9 @@ Val pass@1 / pass@4 / pass@16 (200 questions per dataset, 16 samples, temperatur
    reaches 0.736 / 0.857: see [OSM KGQA](/pages/hrm-graph/osm-spatial-kgqa.md#zero-shot-results-all-models-2026-11-10).
 9. **GLM-5.3 zero-shot (0.459 at 3k tokens, 0.572 at 16k) is below fine-tuned Mimir** on the named macro, mostly
    because 27-40% of its rows run out of budget while thinking; on finished rows it is right 0.75.
+   Superseded (2026-11-24): with the cut-off rows rerun at 32k GLM scores 0.650 strict / 0.713 lenient (12.9% still cut
+   off), above every fine-tuned model under lenient scoring; see
+   [Mimir vs the Baselines](/pages/hrm-graph/mimir-graph-vs-baselines.md#glm-53-token-cap-cut-offs-cap-visibility-pilot-lenient-scoring-2026-11-2324).
 10. **Scoring caveats:** exact answer strings penalise untuned models (CycleCheck above); budget cut-offs count as
     errors; every number is one seed on up to 1,000 rows per file.
 
